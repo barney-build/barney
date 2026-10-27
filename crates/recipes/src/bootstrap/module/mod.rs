@@ -9,12 +9,11 @@ use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::{
-    bootstrap::SpecIdentity,
-    syntax::{
-        ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, Symbol, SymbolError, SymbolTable,
-        SymbolType, TaggedValue,
-    },
+use crate::bootstrap::SpecIdentity;
+
+use syntax::{
+    ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, Symbol, SymbolError, SymbolTable,
+    SymbolType, TaggedValue,
 };
 
 mod action;

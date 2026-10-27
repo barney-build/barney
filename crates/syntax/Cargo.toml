@@ -1,0 +1,11 @@
+[package]
+name = "syntax"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[dependencies]
+itertools.workspace = true
+kdl = { workspace = true, features = ["span"] }
+miette.workspace = true
+thiserror.workspace = true

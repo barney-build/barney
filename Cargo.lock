@@ -596,8 +596,8 @@ dependencies = [
  "itertools",
  "kdl",
  "miette",
+ "syntax",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -766,6 +766,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "syntax"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "kdl",
+ "miette",
+ "thiserror",
 ]
 
 [[package]]

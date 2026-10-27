@@ -7,7 +7,7 @@ use itertools::{Either, Itertools};
 use kdl::{KdlDocument, KdlNode};
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::syntax::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
+use crate::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
 
 /// Process KDL according to the given rule set
 pub fn process_kdl<'a, I>(

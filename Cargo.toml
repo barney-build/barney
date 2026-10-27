@@ -3,7 +3,8 @@ resolver = "3"
 
 members = [
     "crates/recipes",
-    "barney"
+    "barney",
+    "crates/syntax"
 ]
 
 [workspace.dependencies]

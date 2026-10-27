@@ -5,8 +5,8 @@ edition = "2024"
 rust-version = "1.95"
 
 [dependencies]
+syntax = { path = "../syntax" }
 itertools.workspace = true
-kdl = { workspace = true, features = ["span"] }
-miette.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
+miette.workspace = true
+kdl.workspace = true

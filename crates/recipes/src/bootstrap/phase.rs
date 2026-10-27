@@ -5,10 +5,9 @@
 
 use std::collections::HashMap;
 
-use crate::{
-    bootstrap::SpecIdentity,
-    syntax::{ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue},
-};
+use crate::bootstrap::SpecIdentity;
+
+use syntax::{ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
 
 #[derive(Debug)]
 pub struct Phase {

@@ -7,10 +7,9 @@ use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::{
-    bootstrap::SpecIdentity,
-    syntax::{self, ProcessedNode, Script, TaggedValue},
-};
+use crate::bootstrap::SpecIdentity;
+
+use syntax::{self, ProcessedNode, Script, TaggedValue};
 
 /// An Action as defined in the modules exported by various
 /// KDL files.

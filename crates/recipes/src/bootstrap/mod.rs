@@ -14,7 +14,7 @@ pub use phase::Phase;
 mod module;
 pub use module::Module;
 
-use crate::syntax::{self, NodeSpec, SymbolTable};
+use syntax::{self, NodeSpec, SymbolTable};
 
 /// A distro definition is taken from a bootstrap.kdl
 ///

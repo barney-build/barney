@@ -11,9 +11,7 @@ use std::collections::HashMap;
 
 use kdl::KdlNode;
 
-use crate::syntax::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, TaggedValue, process::process_kdl_node,
-};
+use crate::{ArgSpec, NodeDescent, NodeName, NodeSpec, TaggedValue, process::process_kdl_node};
 
 /// A Script is simply a list of processed execution statements
 /// that are in turn flow-guided by incredibly simple boolean
