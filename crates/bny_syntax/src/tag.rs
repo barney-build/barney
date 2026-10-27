@@ -10,6 +10,8 @@ use std::{fmt::Display, str::FromStr};
 use kdl::KdlEntry;
 use thiserror::Error;
 
+mod node;
+
 /// Arguments and indeed properties may be decorated with
 /// a type, i.e a tag, to help control the the intended type
 /// or indeed reference another argument or variable by the FQDN
@@ -60,7 +62,7 @@ impl Display for Tag {
 }
 
 /// Explicitly set type tag
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     /// Accepts string data only
     String,
