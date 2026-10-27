@@ -116,6 +116,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
+name = "bny_syntax"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "kdl",
+ "miette",
+ "thiserror",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,10 +603,10 @@ dependencies = [
 name = "recipes"
 version = "0.1.0"
 dependencies = [
+ "bny_syntax",
  "itertools",
  "kdl",
  "miette",
- "syntax",
  "thiserror",
 ]
 
@@ -766,16 +776,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
-]
-
-[[package]]
-name = "syntax"
-version = "0.1.0"
-dependencies = [
- "itertools",
- "kdl",
- "miette",
- "thiserror",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::bootstrap::SpecIdentity;
 
-use syntax::{self, ProcessedNode, Script, TaggedValue};
+use bny_syntax::{self, ProcessedNode, Script, TaggedValue};
 
 /// An Action as defined in the modules exported by various
 /// KDL files.
@@ -47,7 +47,7 @@ pub enum Error {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Syntax(#[from] syntax::Error),
+    Syntax(#[from] bny_syntax::Error),
 }
 
 impl<'a> Action {

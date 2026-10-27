@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.95"
 
 [dependencies]
-syntax = { path = "../syntax" }
+bny_syntax = { path = "../bny_syntax" }
 itertools.workspace = true
 thiserror.workspace = true
 miette.workspace = true

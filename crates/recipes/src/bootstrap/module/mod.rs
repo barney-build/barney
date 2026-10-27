@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::bootstrap::SpecIdentity;
 
-use syntax::{
+use bny_syntax::{
     ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, Symbol, SymbolError, SymbolTable,
     SymbolType, TaggedValue,
 };

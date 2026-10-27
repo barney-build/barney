@@ -14,7 +14,7 @@ pub use phase::Phase;
 mod module;
 pub use module::Module;
 
-use syntax::{self, NodeSpec, SymbolTable};
+use bny_syntax::{self, NodeSpec, SymbolTable};
 
 /// A distro definition is taken from a bootstrap.kdl
 ///
@@ -93,7 +93,7 @@ pub enum Error {
         src: NamedSource<String>,
 
         #[diagnostic_source(transparent)]
-        source: syntax::Error,
+        source: bny_syntax::Error,
     },
 
     #[error("Module parsing")]
@@ -138,7 +138,7 @@ impl BootstrapSpec {
     /// Load a bootstrap definition (into AST) from a valid KDL document
     /// using the correct procedural lingo.
     pub fn new(source: &NamedSource<String>, doc: &KdlDocument) -> Result<Self, Error> {
-        let nodes = syntax::process_kdl(doc, RULES).map_err(|e| Error::Syntax {
+        let nodes = bny_syntax::process_kdl(doc, RULES).map_err(|e| Error::Syntax {
             src: source.clone(),
             source: e,
         })?;
