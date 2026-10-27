@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
+use bny_recipe::bootstrap::BootstrapSpec;
 use miette::{Context, IntoDiagnostic};
-use recipes::bootstrap::BootstrapSpec;
 use tracing::info;
 
 // Load bootstrap config, handle emission of miette report if needed

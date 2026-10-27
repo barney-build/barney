@@ -101,10 +101,10 @@ dependencies = [
 name = "barney"
 version = "0.1.0"
 dependencies = [
+ "bny_recipe",
  "clap",
  "indicatif",
  "miette",
- "recipes",
  "tokio",
  "tracing",
 ]
@@ -114,6 +114,17 @@ name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+
+[[package]]
+name = "bny_recipe"
+version = "0.1.0"
+dependencies = [
+ "bny_syntax",
+ "itertools",
+ "kdl",
+ "miette",
+ "thiserror",
+]
 
 [[package]]
 name = "bny_syntax"
@@ -597,17 +608,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "recipes"
-version = "0.1.0"
-dependencies = [
- "bny_syntax",
- "itertools",
- "kdl",
- "miette",
- "thiserror",
 ]
 
 [[package]]

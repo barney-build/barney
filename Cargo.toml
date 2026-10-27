@@ -2,9 +2,9 @@
 resolver = "3"
 
 members = [
-    "crates/recipes",
+    "crates/bny_syntax",
+    "crates/bny_recipe",
     "barney",
-    "crates/bny_syntax"
 ]
 
 [workspace.dependencies]
