@@ -10,6 +10,7 @@ use std::{fmt::Display, str::FromStr};
 use kdl::KdlEntry;
 use thiserror::Error;
 
+mod entry;
 mod node;
 
 /// Arguments and indeed properties may be decorated with
