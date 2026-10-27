@@ -143,11 +143,8 @@ impl Module {
         // Pull the ID out
         let id = node
             .args
-            .into_iter()
-            .next()
-            .ok_or_else(|| Error::MissingArgument {
-                span: node.node.span(),
-            })?;
+            .first()
+            .ok_or_else(|| Error::MissingArgument { span: node.span() })?;
         let mut exports = HashMap::new();
         let mut vars = HashMap::new();
         let mut actions = HashMap::new();
@@ -176,14 +173,14 @@ impl Module {
                     symbols
                         .insert(Symbol::new(&namespace, action.id(), SymbolType::Function))
                         .map_err(|e| Error::Symbol {
-                            span: child.node.span(),
+                            span: child.span(),
                             source: e,
                         })?;
                     actions.insert(action.id.clone(), action);
                 }
                 _ => {
                     return Err(Error::UnsupportedNode {
-                        span: child.node.span(),
+                        span: child.span(),
                         id: child.identity,
                     });
                 }

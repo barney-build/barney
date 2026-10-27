@@ -7,11 +7,13 @@
 //! call chains, custody, hashing, etc, without arbitrary
 //! crap polluting the planet.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use kdl::KdlNode;
 
-use crate::{ArgSpec, NodeDescent, NodeName, NodeSpec, TaggedValue, process::process_kdl_node};
+use crate::{
+    ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue, process::process_kdl_node,
+};
 
 /// A Script is simply a list of processed execution statements
 /// that are in turn flow-guided by incredibly simple boolean
@@ -159,7 +161,14 @@ impl<'a> Statement {
 }
 
 impl<'a> Script {
-    pub fn from_kdl_node(node: &'a KdlNode) -> Result<Self, super::Error> {
+    pub fn from_node<I>(node: &'a ProcessedNode<'a, I>) -> Result<Self, super::Error>
+    where
+        I: Into<usize> + Eq + PartialEq + PartialOrd + Hash + Debug + Clone,
+    {
+        Self::from_kdl_node(node.node)
+    }
+
+    fn from_kdl_node(node: &'a KdlNode) -> Result<Self, super::Error> {
         let statements = Statement::from_kdl_node(node)?;
         Ok(Self { statements })
     }

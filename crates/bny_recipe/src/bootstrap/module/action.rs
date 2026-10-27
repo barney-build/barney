@@ -58,9 +58,7 @@ impl<'a> Action {
         let action_id = node
             .args
             .first()
-            .ok_or_else(|| super::Error::MissingArgument {
-                span: node.node.span(),
-            })?;
+            .ok_or_else(|| super::Error::MissingArgument { span: node.span() })?;
         // absolutely cant have errors
         assert!(matches!(action_id, TaggedValue::Content(_)));
         let id = action_id.to_string();
@@ -74,13 +72,10 @@ impl<'a> Action {
 
         // grab arguments set and enforce 1 occurance
         if !props.is_empty() {
-            let _props_root =
-                props
-                    .iter()
-                    .exactly_one()
-                    .map_err(|_| Error::OnePropertiesBlock {
-                        span: node.node.span(),
-                    })?;
+            let _props_root = props
+                .iter()
+                .exactly_one()
+                .map_err(|_| Error::OnePropertiesBlock { span: node.span() })?;
         }
 
         let execs = node
@@ -93,10 +88,8 @@ impl<'a> Action {
             let exec_root = execs
                 .iter()
                 .exactly_one()
-                .map_err(|_| Error::OneExecuteBlock {
-                    span: node.node.span(),
-                })?;
-            Some(Script::from_kdl_node(exec_root.node).map_err(Error::Syntax)?)
+                .map_err(|_| Error::OneExecuteBlock { span: node.span() })?;
+            Some(Script::from_node(exec_root).map_err(Error::Syntax)?)
         } else {
             None
         };

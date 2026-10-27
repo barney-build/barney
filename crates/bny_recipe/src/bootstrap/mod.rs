@@ -163,8 +163,8 @@ impl BootstrapSpec {
                     // essentially unimplemented()
                     return Err(Error::UnsupportedID {
                         src: source.clone(),
-                        id: node.identity,
-                        span: node.node.span(),
+                        id: node.identity.clone(),
+                        span: node.span(),
                     });
                 }
             }

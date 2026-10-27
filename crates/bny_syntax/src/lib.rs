@@ -38,17 +38,22 @@ where
 
     pub children: Vec<ProcessedNode<'a, I>>,
 
-    /// Underlying KDL node
-    pub node: &'a KdlNode,
+    // Underlying KDL node
+    pub(crate) node: &'a KdlNode,
 }
 
 impl<'a, I> ProcessedNode<'a, I>
 where
     I: Into<usize> + Eq + PartialEq + PartialOrd + Hash + Debug + Clone,
 {
-    // Zero-copy name accessor
+    /// Zero-copy name accessor
     pub fn name(&self) -> &str {
         self.node.name().value()
+    }
+
+    /// Expose the source span for the node
+    pub fn span(&self) -> SourceSpan {
+        self.node.span()
     }
 }
 
