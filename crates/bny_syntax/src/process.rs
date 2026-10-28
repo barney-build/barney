@@ -7,7 +7,9 @@ use itertools::{Either, Itertools};
 use kdl::{KdlDocument, KdlNode};
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
+use crate::{
+    ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue, tag::NodeTag,
+};
 
 /// Process KDL according to the given rule set
 pub fn process_kdl<'a, I>(
@@ -136,8 +138,15 @@ where
         processed_args.push(proc);
     }
 
+    let tag: Option<NodeTag> = if let Some(ty) = node.ty() {
+        Some(ty.try_into()?)
+    } else {
+        None
+    };
+
     Ok(ProcessedNode {
         identity: rule.identity.clone(),
+        tag,
         args: processed_args,
         props: properties
             .into_iter()

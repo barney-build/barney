@@ -12,6 +12,7 @@ use thiserror::Error;
 
 mod entry;
 mod node;
+pub use node::NodeTag;
 
 /// Arguments and indeed properties may be decorated with
 /// a type, i.e a tag, to help control the the intended type

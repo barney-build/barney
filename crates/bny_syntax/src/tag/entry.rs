@@ -12,14 +12,17 @@ pub enum EntryTag {
     Variable,
 }
 
-impl TryInto<EntryTag> for &KdlIdentifier {
-    type Error = super::TagError;
+impl<'a> TryFrom<&'a KdlIdentifier> for EntryTag {
+    type Error = crate::Error;
 
-    fn try_into(self) -> Result<EntryTag, Self::Error> {
-        match self.value() {
-            "prop" => Ok(EntryTag::Property),
-            "var" => Ok(EntryTag::Variable),
-            mismatch => Err(super::TagError::UnknownTag(mismatch.to_owned())),
+    fn try_from(other: &'a KdlIdentifier) -> Result<Self, Self::Error> {
+        match other.value() {
+            "prop" => Ok(Self::Property),
+            "var" => Ok(Self::Variable),
+            mismatch => Err(Self::Error::InvalidTag {
+                span: other.span(),
+                tag: mismatch.to_owned(),
+            }),
         }
     }
 }

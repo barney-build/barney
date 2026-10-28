@@ -17,19 +17,22 @@ pub enum NodeTag {
     TypeRestriction { restrict: Type },
 }
 
-impl TryInto<NodeTag> for &KdlIdentifier {
-    type Error = super::TagError;
+impl<'a> TryFrom<&'a KdlIdentifier> for NodeTag {
+    type Error = crate::Error;
 
-    fn try_into(self) -> Result<NodeTag, Self::Error> {
-        match self.value() {
-            "barney" | "bny" => Ok(NodeTag::Schema),
-            "string" => Ok(NodeTag::TypeRestriction {
+    fn try_from(other: &'a KdlIdentifier) -> Result<Self, Self::Error> {
+        match other.value() {
+            "barney" | "bny" => Ok(Self::Schema),
+            "string" => Ok(Self::TypeRestriction {
                 restrict: Type::String,
             }),
-            "list" => Ok(NodeTag::TypeRestriction {
+            "list" => Ok(Self::TypeRestriction {
                 restrict: Type::List,
             }),
-            mismatch => Err(super::TagError::UnknownTag(mismatch.to_owned())),
+            mismatch => Err(Self::Error::InvalidTag {
+                span: other.span(),
+                tag: mismatch.to_string(),
+            }),
         }
     }
 }

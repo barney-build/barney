@@ -25,6 +25,8 @@ pub use script::{Script, Statement};
 mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
 
+use tag::NodeTag;
+
 /// A "Baked" node when processed via AST
 #[derive(Debug)]
 pub struct ProcessedNode<'a, I>
@@ -32,6 +34,8 @@ where
     I: Into<usize> + Eq + PartialEq + PartialOrd + Hash + Debug + Clone,
 {
     pub identity: I,
+    pub tag: Option<NodeTag>,
+
     // TODO: Use type system with tagging + variable references
     pub args: Vec<TaggedValue>,
     pub props: HashMap<String, String>,
