@@ -3,9 +3,9 @@
 
 //! Syntax helpers / errors
 
-use std::{collections::HashMap, fmt::Debug, hash::Hash, vec};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use kdl::KdlNode;
+use kdl::{KdlEntry, KdlNode, KdlValue};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
@@ -25,6 +25,8 @@ pub use script::{Script, Statement};
 mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
 
+use crate::tag::EntryTag;
+
 /// A "Baked" node when processed via AST
 #[derive(Debug)]
 pub struct ProcessedNode<'a, I>
@@ -35,13 +37,82 @@ where
     pub tag: Option<NodeTag>,
 
     // TODO: Use type system with tagging + variable references
-    pub args: Vec<TaggedValue>,
+    pub args: Vec<ProcessedEntry>,
     pub props: HashMap<String, String>,
 
     pub children: Vec<ProcessedNode<'a, I>>,
 
     // Underlying KDL node
     pub(crate) node: &'a KdlNode,
+}
+
+/// A baked entry, ie anything *after* the node declaration but not within the children.
+/// Note a naked entry (non-property) can still be a non-string, in that the parent node
+/// itself has a valid string ID already so subsequent arguments/etc may be integers or
+/// whichever.
+#[derive(Debug)]
+pub struct ProcessedEntry {
+    /// Optionally specifies if there is a binding: Property or Variable
+    pub tag: Option<EntryTag>,
+    pub value: ProcessedValue,
+    span: SourceSpan,
+}
+
+impl ProcessedEntry {
+    pub fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+impl<'a> TryFrom<&'a KdlEntry> for ProcessedEntry {
+    type Error = crate::Error;
+
+    fn try_from(entry: &'a KdlEntry) -> Result<Self, Self::Error> {
+        let tag: Option<EntryTag> = if let Some(ty) = entry.ty() {
+            Some(ty.try_into()?)
+        } else {
+            None
+        };
+        Ok(Self {
+            tag,
+            span: entry.span(),
+            value: entry.value().into(),
+        })
+    }
+}
+
+/// A processed value within an entry, either a positional argument or a property pair's value
+/// Note: Integer support directly maps to kdl.dev so we can later add type annotations for smaller
+/// shortage if needed.
+#[derive(Debug)]
+pub enum ProcessedValue {
+    Boolean(bool),
+    Float(f64),
+    String(String),
+    Integer(i128),
+    Null,
+}
+
+impl ProcessedValue {
+    /// Same as KdlValue, valid string or nay
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            ProcessedValue::String(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
+impl<'a> From<&'a KdlValue> for ProcessedValue {
+    fn from(value: &'a KdlValue) -> Self {
+        match value {
+            KdlValue::String(s) => Self::String(s.clone()),
+            KdlValue::Integer(i) => Self::Integer(*i),
+            KdlValue::Float(f) => Self::Float(*f),
+            KdlValue::Bool(b) => Self::Boolean(*b),
+            KdlValue::Null => Self::Null,
+        }
+    }
 }
 
 impl<'a, I> ProcessedNode<'a, I>
@@ -62,6 +133,19 @@ where
 /// Some manner of syntax issue in our DSL atop KDL
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    /// ie some argument seek or otherwise went boom when we expect it to always work
+    #[error("internal error")]
+    InternalError {
+        #[label("an internal error occurred. please report it")]
+        span: SourceSpan,
+    },
+
+    #[error("invalid argument")]
+    StringIdOnly {
+        #[label("the argument must be a valid string")]
+        span: SourceSpan,
+    },
+
     /// Encountered an unexpected property, should be an ID
     #[error("unexpected property")]
     UnexpectedProperty {

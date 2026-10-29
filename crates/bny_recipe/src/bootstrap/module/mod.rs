@@ -12,8 +12,8 @@ use thiserror::Error;
 use crate::bootstrap::SpecIdentity;
 
 use bny_syntax::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTag, NodeTagPolicy, ProcessedNode, Symbol,
-    SymbolError, SymbolTable, SymbolType, TaggedValue, Type,
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTag, NodeTagPolicy, ProcessedEntry,
+    ProcessedNode, Symbol, SymbolError, SymbolTable, SymbolType, Type,
 };
 
 mod action;
@@ -27,8 +27,8 @@ pub use action::Action;
 pub struct Module {
     id: String,
     // TODO: Disallow any tags but var/arg
-    vars: HashMap<String, TaggedValue>,
-    exports: HashMap<String, TaggedValue>,
+    vars: HashMap<String, ProcessedEntry>,
+    exports: HashMap<String, ProcessedEntry>,
     // TODO: Consider sets
     actions: HashMap<String, Action>,
 }
@@ -41,6 +41,12 @@ pub enum Error {
     #[diagnostic()]
     MissingArgument {
         #[label("fatal: missing argument")]
+        span: SourceSpan,
+    },
+
+    #[error("module name invalid")]
+    StringIdOnly {
+        #[label("modules must have valid string name")]
         span: SourceSpan,
     },
 
@@ -171,7 +177,11 @@ impl Module {
         let mut exports = HashMap::new();
         let mut vars = HashMap::new();
         let mut actions = HashMap::new();
-        let namespace = id.to_string();
+        let namespace = id
+            .value
+            .as_string()
+            .ok_or_else(|| Error::StringIdOnly { span: id.span() })?
+            .to_owned();
 
         for child in node.children {
             match child.identity {

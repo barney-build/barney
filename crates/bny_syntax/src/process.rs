@@ -7,7 +7,7 @@ use itertools::{Either, Itertools};
 use kdl::{KdlDocument, KdlNode};
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
+use crate::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedEntry, ProcessedNode};
 
 /// Process KDL according to the given rule set
 pub fn process_kdl<'a, I>(
@@ -132,14 +132,20 @@ where
     // Process arguments into typed values
     let mut processed_args = vec![];
     for arg in args.into_iter() {
-        let proc = TaggedValue::process_kdl_entry(arg)?;
+        let proc: ProcessedEntry = arg.try_into()?;
         processed_args.push(proc);
     }
 
-    // TODO: Handle tags!
+    // TODO: Handle tag validation!
+    let tag = if let Some(ty) = node.ty() {
+        Some(ty.try_into()?)
+    } else {
+        None
+    };
+
     Ok(ProcessedNode {
         identity: rule.identity.clone(),
-        tag: None,
+        tag,
         args: processed_args,
         props: properties
             .into_iter()

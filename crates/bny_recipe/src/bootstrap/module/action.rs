@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::bootstrap::SpecIdentity;
 
-use bny_syntax::{self, ProcessedNode, Script, TaggedValue};
+use bny_syntax::{self, ProcessedNode, Script};
 
 /// An Action as defined in the modules exported by various
 /// KDL files.
@@ -38,6 +38,13 @@ pub enum Error {
         span: SourceSpan,
     },
 
+    #[error("invalid action name")]
+    #[diagnostic()]
+    StringIdOnly {
+        #[label("action must have valid string name")]
+        span: SourceSpan,
+    },
+
     #[error("processing execute")]
     #[diagnostic()]
     OneExecuteBlock {
@@ -59,9 +66,13 @@ impl<'a> Action {
             .args
             .first()
             .ok_or_else(|| super::Error::MissingArgument { span: node.span() })?;
-        // absolutely cant have errors
-        assert!(matches!(action_id, TaggedValue::Content(_)));
-        let id = action_id.to_string();
+        let id = action_id
+            .value
+            .as_string()
+            .ok_or_else(|| Error::StringIdOnly {
+                span: action_id.span(),
+            })?
+            .to_owned();
 
         // grab all Args
         let props = node

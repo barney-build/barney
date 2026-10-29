@@ -12,7 +12,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use kdl::KdlNode;
 
 use crate::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedNode, TaggedValue,
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedEntry, ProcessedNode,
     process::process_kdl_node,
 };
 
@@ -45,7 +45,7 @@ pub enum Statement {
         keyword: String,
 
         /// A set of arguments
-        arguments: Vec<TaggedValue>,
+        arguments: Vec<ProcessedEntry>,
 
         /// A set of properties
         /// TODO: Used TaggedValue
@@ -135,7 +135,17 @@ impl<'a> Statement {
                 StatementID::WithCondition => {
                     // The root level is skipped and we dont do automatic recursion
                     let processed = Statement::from_kdl_node(child.node)?;
-                    let reference = child.args.first().unwrap().to_string();
+                    let ref_node = child
+                        .args
+                        .first()
+                        .ok_or_else(|| super::Error::InternalError { span: child.span() })?;
+                    let reference = ref_node
+                        .value
+                        .as_string()
+                        .ok_or_else(|| super::Error::StringIdOnly {
+                            span: ref_node.span(),
+                        })?
+                        .to_owned();
                     statements.push(Statement::WithCondition {
                         reference,
                         statements: processed,
@@ -144,9 +154,33 @@ impl<'a> Statement {
                 StatementID::ForEachLoop => {
                     // Likewise, root level is skipped, not automatic recursion
                     let processed = Statement::from_kdl_node(child.node)?;
-                    // TODO: Improve like a LOT
-                    let arg = child.args.first().unwrap().to_string();
-                    let target = child.args.get(1).unwrap().to_string();
+
+                    // Variable arg ID
+                    let arg_node = child
+                        .args
+                        .first()
+                        .ok_or_else(|| super::Error::InternalError { span: child.span() })?;
+                    let arg = arg_node
+                        .value
+                        .as_string()
+                        .ok_or_else(|| super::Error::StringIdOnly {
+                            span: arg_node.span(),
+                        })?
+                        .to_owned();
+
+                    // Now we need the *target* binding that we're pulling *FROM*
+                    let target_node = child
+                        .args
+                        .get(1)
+                        .ok_or_else(|| super::Error::InternalError { span: child.span() })?;
+                    let target = target_node
+                        .value
+                        .as_string()
+                        .ok_or_else(|| super::Error::StringIdOnly {
+                            span: target_node.span(),
+                        })?
+                        .to_owned();
+
                     statements.push(Statement::ForEachLoop {
                         arg,
                         target,

@@ -8,14 +8,14 @@ use std::collections::HashMap;
 use crate::bootstrap::SpecIdentity;
 
 use bny_syntax::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedNode, TaggedValue,
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedEntry, ProcessedNode,
 };
 
 #[derive(Debug)]
 pub struct Phase {
     id: String,
     // TODO: Disallow any tags but var/arg
-    _vars: HashMap<String, TaggedValue>,
+    _vars: HashMap<String, ProcessedEntry>,
 }
 
 /// rules for loading phase nodes
@@ -76,7 +76,15 @@ impl Phase {
             HashMap::new()
         };
         Self {
-            id: node.args.into_iter().next().unwrap().to_string(),
+            id: node
+                .args
+                .into_iter()
+                .next()
+                .unwrap()
+                .value
+                .as_string()
+                .unwrap()
+                .to_owned(),
             _vars: vars,
         }
     }

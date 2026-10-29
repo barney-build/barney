@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Ikey Doherty
 // SPDX-License-Identifier: MPL-2.0
 
+use std::fmt::Display;
+
 use kdl::KdlIdentifier;
 
 #[derive(Debug, Clone)]
@@ -10,6 +12,15 @@ pub enum EntryTag {
 
     /// Local contextual variable (`(var)`)
     Variable,
+}
+
+impl Display for EntryTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryTag::Property => f.write_str("(prop)"),
+            EntryTag::Variable => f.write_str("(var)"),
+        }
+    }
 }
 
 impl<'a> TryFrom<&'a KdlIdentifier> for EntryTag {
@@ -29,7 +40,7 @@ impl<'a> TryFrom<&'a KdlIdentifier> for EntryTag {
 
 #[cfg(test)]
 mod tests {
-    use crate::tag::entry::EntryTag;
+    use crate::tag::EntryTag;
     use kdl::KdlDocument;
 
     #[test]

@@ -11,6 +11,7 @@ use kdl::KdlEntry;
 use thiserror::Error;
 
 mod entry;
+pub use entry::EntryTag;
 mod node;
 pub use node::NodeTag;
 
