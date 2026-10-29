@@ -7,7 +7,9 @@ use std::collections::HashMap;
 
 use crate::bootstrap::SpecIdentity;
 
-use bny_syntax::{ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue};
+use bny_syntax::{
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedNode, TaggedValue,
+};
 
 #[derive(Debug)]
 pub struct Phase {
@@ -20,6 +22,7 @@ pub struct Phase {
 pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
     name: NodeName::Static("phase"),
     identity: SpecIdentity::Phase,
+    tags: NodeTagPolicy::None,
 
     // Single argument: ID
     args: ArgSpec::Exactly(1),
@@ -29,6 +32,7 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
     children: &[NodeSpec {
         name: NodeName::Static("variables"),
         identity: SpecIdentity::PhaseVariables,
+        tags: NodeTagPolicy::None,
         args: ArgSpec::None,
         props: &[],
         // Arbitrary children due to names
@@ -36,6 +40,7 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
             // User defined name
             name: NodeName::Dynamic,
             identity: SpecIdentity::PhaseVariable,
+            tags: NodeTagPolicy::None,
             // Variables have one argument, the value
             args: ArgSpec::Exactly(1),
             props: &[],

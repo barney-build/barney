@@ -12,7 +12,8 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use kdl::KdlNode;
 
 use crate::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, TaggedValue, process::process_kdl_node,
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTagPolicy, ProcessedNode, TaggedValue,
+    process::process_kdl_node,
 };
 
 /// A Script is simply a list of processed execution statements
@@ -81,6 +82,7 @@ impl From<StatementID> for usize {
 static RULES: NodeSpec<'static, StatementID> = NodeSpec {
     name: NodeName::Dynamic,
     identity: StatementID::Root,
+    tags: NodeTagPolicy::None,
     args: ArgSpec::Variable, // ignored
     props: &[],              // ignored
     children: &[
@@ -88,6 +90,7 @@ static RULES: NodeSpec<'static, StatementID> = NodeSpec {
         NodeSpec {
             name: NodeName::Static("with"),
             identity: StatementID::WithCondition,
+            tags: NodeTagPolicy::None,
             // one argument only
             args: ArgSpec::Exactly(1),
             props: &[],    // ignored
@@ -98,6 +101,7 @@ static RULES: NodeSpec<'static, StatementID> = NodeSpec {
         NodeSpec {
             name: NodeName::Static("foreach"),
             identity: StatementID::ForEachLoop,
+            tags: NodeTagPolicy::None,
             args: ArgSpec::Exactly(2),
             props: &[],    // ignored
             children: &[], // ignored
@@ -107,6 +111,7 @@ static RULES: NodeSpec<'static, StatementID> = NodeSpec {
         NodeSpec {
             name: NodeName::Dynamic,
             identity: StatementID::Execute,
+            tags: NodeTagPolicy::None,
             args: ArgSpec::Variable,
             props: &[],    // dynamic
             children: &[], // not allowed

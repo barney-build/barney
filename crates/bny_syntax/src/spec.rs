@@ -6,6 +6,8 @@
 
 use std::{fmt::Debug, hash::Hash};
 
+use crate::tag::NodeTag;
+
 /// Node identifier rules
 #[derive(Debug)]
 pub enum NodeName {
@@ -26,6 +28,18 @@ pub enum NodeDescent {
     Never,
 }
 
+#[derive(Debug)]
+pub enum NodeTagPolicy<'a> {
+    /// None allowed
+    None,
+
+    /// Optional from one of the given nodettags
+    Optional(&'a [NodeTag]),
+
+    // Required, from one of the given nodettags
+    Required(&'a [NodeTag]),
+}
+
 /// Control evaluation of nodes to enforce schema
 #[derive(Debug)]
 pub struct NodeSpec<'a, I>
@@ -37,6 +51,9 @@ where
 
     /// Identity for the node to retain context in processing
     pub identity: I,
+
+    /// Expected tag
+    pub tags: NodeTagPolicy<'a>,
 
     /// Supported argument kinds
     pub args: ArgSpec,

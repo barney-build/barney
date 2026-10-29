@@ -12,8 +12,8 @@ use thiserror::Error;
 use crate::bootstrap::SpecIdentity;
 
 use bny_syntax::{
-    ArgSpec, NodeDescent, NodeName, NodeSpec, ProcessedNode, Symbol, SymbolError, SymbolTable,
-    SymbolType, TaggedValue,
+    ArgSpec, NodeDescent, NodeName, NodeSpec, NodeTag, NodeTagPolicy, ProcessedNode, Symbol,
+    SymbolError, SymbolTable, SymbolType, TaggedValue, Type,
 };
 
 mod action;
@@ -71,6 +71,7 @@ pub enum Error {
 pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
     name: NodeName::Static("module"),
     identity: SpecIdentity::Module,
+    tags: NodeTagPolicy::None,
     args: ArgSpec::Exactly(1),
     props: &[],
     children: &[
@@ -78,11 +79,13 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
         NodeSpec {
             name: NodeName::Static("variables"),
             identity: SpecIdentity::ModuleVariables,
+            tags: NodeTagPolicy::None,
             args: ArgSpec::None,
             props: &[],
             children: &[NodeSpec {
                 name: NodeName::Dynamic,
                 identity: SpecIdentity::ModuleVariable,
+                tags: NodeTagPolicy::None,
                 args: ArgSpec::Exactly(1),
                 props: &[],
                 children: &[],
@@ -94,11 +97,13 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
         NodeSpec {
             name: NodeName::Static("exports"),
             identity: SpecIdentity::ModuleExports,
+            tags: NodeTagPolicy::None,
             args: ArgSpec::None,
             props: &[],
             children: &[NodeSpec {
                 name: NodeName::Dynamic,
                 identity: SpecIdentity::ModuleExport,
+                tags: NodeTagPolicy::None,
                 args: ArgSpec::Exactly(1),
                 props: &[],
                 children: &[],
@@ -109,6 +114,7 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
         NodeSpec {
             name: NodeName::Static("action"),
             identity: SpecIdentity::ModuleAction,
+            tags: NodeTagPolicy::None,
             args: ArgSpec::Exactly(1),
             props: &[],
             children: &[
@@ -116,14 +122,31 @@ pub(super) static RULES: NodeSpec<'static, SpecIdentity> = NodeSpec {
                     name: NodeName::Static("properties"),
                     identity: SpecIdentity::ModuleActionProperties,
                     args: ArgSpec::None,
+                    tags: NodeTagPolicy::None,
                     props: &[],
-                    children: &[],
-                    descent: NodeDescent::Never,
+                    children: &[NodeSpec {
+                        name: NodeName::Dynamic,
+                        identity: SpecIdentity::ModuleActionProperty,
+                        tags: NodeTagPolicy::Required(&[
+                            NodeTag::TypeRestriction {
+                                restrict: Type::List,
+                            },
+                            NodeTag::TypeRestriction {
+                                restrict: Type::String,
+                            },
+                        ]),
+                        args: ArgSpec::Variable,
+                        props: &[],
+                        children: &[],
+                        descent: NodeDescent::Normal,
+                    }],
+                    descent: NodeDescent::Normal,
                 },
                 NodeSpec {
                     name: NodeName::Static("execute"),
                     identity: SpecIdentity::ModuleActionExecute,
                     args: ArgSpec::None,
+                    tags: NodeTagPolicy::None,
                     props: &[],
                     children: &[],
                     descent: NodeDescent::Never,

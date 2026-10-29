@@ -56,6 +56,9 @@ pub enum SpecIdentity {
     /// An actions expected properties
     ModuleActionProperties,
 
+    /// An individual property
+    ModuleActionProperty,
+
     /// Executor definition
     ModuleActionExecute,
 }

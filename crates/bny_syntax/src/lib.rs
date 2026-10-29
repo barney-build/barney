@@ -17,15 +17,13 @@ mod process;
 pub use process::process_kdl;
 
 mod tag;
-pub use tag::{Tag, TaggedValue};
+pub use tag::{NodeTag, Tag, TaggedValue, Type};
 
 mod script;
 pub use script::{Script, Statement};
 
 mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
-
-use tag::NodeTag;
 
 /// A "Baked" node when processed via AST
 #[derive(Debug)]
@@ -105,6 +103,13 @@ pub enum Error {
     #[error("unknown tag")]
     InvalidTag {
         #[label("Encountered an invalid annotation tag: {tag}")]
+        span: SourceSpan,
+        tag: String,
+    },
+
+    #[error("type attribute not supported here: {tag}")]
+    TypeAttribute {
+        #[label("This node cannot be used in conjunction with type attributes")]
         span: SourceSpan,
         tag: String,
     },
