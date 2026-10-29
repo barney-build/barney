@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use kdl::KdlIdentifier;
 
-use crate::tag::Type;
+use crate::Type;
 
 /// A node can have only one attribute at most,
 /// which can be used to mark it as a schema attribute
@@ -55,8 +55,8 @@ impl Display for NodeTag {
 mod tests {
     use kdl::KdlDocument;
 
-    use crate::tag::Type;
-    use crate::tag::node::NodeTag;
+    use crate::Type;
+    use crate::node::NodeTag;
 
     #[test]
     fn test_schema() {

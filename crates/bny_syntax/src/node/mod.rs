@@ -3,7 +3,10 @@
 
 //! Barney syntax node support
 
-use crate::{NodeTag, ProcessedEntry};
+mod tag;
+pub use tag::*;
+
+use crate::ProcessedEntry;
 
 use kdl::KdlNode;
 use miette::SourceSpan;

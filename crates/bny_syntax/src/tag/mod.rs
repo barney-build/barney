@@ -7,15 +7,3 @@
 
 mod entry;
 pub use entry::EntryTag;
-mod node;
-pub use node::NodeTag;
-
-/// Explicitly set type tag
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    /// Accepts string data only
-    String,
-
-    /// Accepts (merges) list of string data only
-    List,
-}

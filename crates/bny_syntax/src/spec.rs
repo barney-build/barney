@@ -6,7 +6,7 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::tag::NodeTag;
+use crate::NodeTag;
 
 /// Node identifier rules
 #[derive(Debug)]

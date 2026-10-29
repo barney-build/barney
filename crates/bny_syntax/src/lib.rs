@@ -20,7 +20,7 @@ mod process;
 pub use process::process_kdl;
 
 mod tag;
-pub use tag::{NodeTag, Type};
+pub use crate::node::NodeTag;
 
 mod script;
 pub use script::{Script, Statement};
@@ -29,6 +29,16 @@ mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
 
 use crate::tag::EntryTag;
+
+/// Explicitly set type tag
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Type {
+    /// Accepts string data only
+    String,
+
+    /// Accepts (merges) list of string data only
+    List,
+}
 
 /// A baked entry, ie anything *after* the node declaration but not within the children.
 /// Note a naked entry (non-property) can still be a non-string, in that the parent node
