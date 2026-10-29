@@ -192,9 +192,22 @@ pub enum Error {
     },
 
     #[error("type attribute not supported here: {tag}")]
-    TypeAttribute {
+    IllegalTypeAttribute {
         #[label("This node cannot be used in conjunction with type attributes")]
         span: SourceSpan,
         tag: String,
+    },
+
+    #[error("type attribute not supported here: {tag}")]
+    WrongTypeAttribute {
+        #[label("This tag is unsupported for this node")]
+        span: SourceSpan,
+        tag: String,
+    },
+
+    #[error("type attribute missing")]
+    MissingTypeAttribute {
+        #[label("This node requires a type attribute")]
+        span: SourceSpan,
     },
 }

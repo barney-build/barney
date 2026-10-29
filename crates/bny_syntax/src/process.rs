@@ -7,7 +7,10 @@ use itertools::{Either, Itertools};
 use kdl::{KdlDocument, KdlNode};
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{ArgSpec, Error, NodeDescent, NodeName, NodeSpec, ProcessedEntry, ProcessedNode};
+use crate::{
+    ArgSpec, Error, NodeDescent, NodeName, NodeSpec, NodeTag, NodeTagPolicy, ProcessedEntry,
+    ProcessedNode,
+};
 
 /// Process KDL according to the given rule set
 pub fn process_kdl<'a, I>(
@@ -137,11 +140,52 @@ where
     }
 
     // TODO: Handle tag validation!
-    let tag = if let Some(ty) = node.ty() {
+    let tag: Option<NodeTag> = if let Some(ty) = node.ty() {
         Some(ty.try_into()?)
     } else {
         None
     };
+
+    match rule.tags {
+        // no tags allowed.
+        NodeTagPolicy::None => {
+            if let Some(tag) = tag {
+                return Err(Error::IllegalTypeAttribute {
+                    span: node.span(),
+                    tag: tag.to_string(),
+                });
+            }
+        }
+        // optional but ONE OF given set
+        NodeTagPolicy::Optional(node_tags) => {
+            if let Some(tag) = &tag {
+                match node_tags.iter().find(|n| *n == tag) {
+                    Some(_) => {}
+                    None => {
+                        return Err(Error::WrongTypeAttribute {
+                            span: node.span(),
+                            tag: tag.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        NodeTagPolicy::Required(node_tags) => {
+            if let Some(tag) = &tag {
+                match node_tags.iter().find(|n| *n == tag) {
+                    Some(_) => {}
+                    None => {
+                        return Err(Error::WrongTypeAttribute {
+                            span: node.span(),
+                            tag: tag.to_string(),
+                        });
+                    }
+                }
+            } else {
+                return Err(Error::MissingTypeAttribute { span: node.span() });
+            }
+        }
+    }
 
     Ok(ProcessedNode {
         identity: rule.identity.clone(),

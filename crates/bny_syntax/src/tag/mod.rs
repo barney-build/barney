@@ -11,7 +11,7 @@ mod node;
 pub use node::NodeTag;
 
 /// Explicitly set type tag
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     /// Accepts string data only
     String,
