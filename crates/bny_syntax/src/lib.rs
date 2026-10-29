@@ -3,15 +3,18 @@
 
 //! Syntax helpers / errors
 
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::fmt::Debug;
 
-use kdl::{KdlEntry, KdlNode, KdlValue};
+use kdl::{KdlEntry, KdlValue};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 // export spec types
 mod spec;
 pub use spec::*;
+
+mod node;
+pub use node::*;
 
 mod process;
 pub use process::process_kdl;
@@ -26,25 +29,6 @@ mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
 
 use crate::tag::EntryTag;
-
-/// A "Baked" node when processed via AST
-#[derive(Debug)]
-pub struct ProcessedNode<'a, I>
-where
-    I: Into<usize> + Eq + PartialEq + PartialOrd + Hash + Debug + Clone,
-{
-    pub identity: I,
-    pub tag: Option<NodeTag>,
-
-    // TODO: Use type system with tagging + variable references
-    pub args: Vec<ProcessedEntry>,
-    pub props: HashMap<String, String>,
-
-    pub children: Vec<ProcessedNode<'a, I>>,
-
-    // Underlying KDL node
-    pub(crate) node: &'a KdlNode,
-}
 
 /// A baked entry, ie anything *after* the node declaration but not within the children.
 /// Note a naked entry (non-property) can still be a non-string, in that the parent node
@@ -112,21 +96,6 @@ impl<'a> From<&'a KdlValue> for ProcessedValue {
             KdlValue::Bool(b) => Self::Boolean(*b),
             KdlValue::Null => Self::Null,
         }
-    }
-}
-
-impl<'a, I> ProcessedNode<'a, I>
-where
-    I: Into<usize> + Eq + PartialEq + PartialOrd + Hash + Debug + Clone,
-{
-    /// Zero-copy name accessor
-    pub fn name(&self) -> &str {
-        self.node.name().value()
-    }
-
-    /// Expose the source span for the node
-    pub fn span(&self) -> SourceSpan {
-        self.node.span()
     }
 }
 
