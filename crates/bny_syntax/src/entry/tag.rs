@@ -40,7 +40,7 @@ impl<'a> TryFrom<&'a KdlIdentifier> for EntryTag {
 
 #[cfg(test)]
 mod tests {
-    use crate::tag::EntryTag;
+    use crate::EntryTag;
     use kdl::KdlDocument;
 
     #[test]

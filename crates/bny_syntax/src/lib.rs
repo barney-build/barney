@@ -5,7 +5,7 @@
 
 use std::fmt::Debug;
 
-use kdl::{KdlEntry, KdlValue};
+use kdl::KdlValue;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
@@ -13,13 +13,15 @@ use thiserror::Error;
 mod spec;
 pub use spec::*;
 
+mod entry;
+pub use entry::*;
+
 mod node;
 pub use node::*;
 
 mod process;
 pub use process::process_kdl;
 
-mod tag;
 pub use crate::node::NodeTag;
 
 mod script;
@@ -27,8 +29,6 @@ pub use script::{Script, Statement};
 
 mod symbol;
 pub use symbol::{Symbol, SymbolError, SymbolTable, SymbolType};
-
-use crate::tag::EntryTag;
 
 /// Explicitly set type tag
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,41 +38,6 @@ pub enum Type {
 
     /// Accepts (merges) list of string data only
     List,
-}
-
-/// A baked entry, ie anything *after* the node declaration but not within the children.
-/// Note a naked entry (non-property) can still be a non-string, in that the parent node
-/// itself has a valid string ID already so subsequent arguments/etc may be integers or
-/// whichever.
-#[derive(Debug)]
-pub struct ProcessedEntry {
-    /// Optionally specifies if there is a binding: Property or Variable
-    pub tag: Option<EntryTag>,
-    pub value: ProcessedValue,
-    span: SourceSpan,
-}
-
-impl ProcessedEntry {
-    pub fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-impl<'a> TryFrom<&'a KdlEntry> for ProcessedEntry {
-    type Error = crate::Error;
-
-    fn try_from(entry: &'a KdlEntry) -> Result<Self, Self::Error> {
-        let tag: Option<EntryTag> = if let Some(ty) = entry.ty() {
-            Some(ty.try_into()?)
-        } else {
-            None
-        };
-        Ok(Self {
-            tag,
-            span: entry.span(),
-            value: entry.value().into(),
-        })
-    }
 }
 
 /// A processed value within an entry, either a positional argument or a property pair's value
