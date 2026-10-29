@@ -17,7 +17,7 @@ mod process;
 pub use process::process_kdl;
 
 mod tag;
-pub use tag::{NodeTag, Tag, TaggedValue, Type};
+pub use tag::{NodeTag, Type};
 
 mod script;
 pub use script::{Script, Statement};
