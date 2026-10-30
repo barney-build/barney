@@ -5,7 +5,7 @@
 
 use indextree::{Arena, NodeId};
 use itertools::Itertools;
-use kdl::{KdlDocument, KdlError, KdlNode};
+use kdl::{KdlDocument, KdlEntry, KdlError, KdlIdentifier, KdlNode};
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -15,6 +15,19 @@ use crate::NodeTag;
 pub struct BnyNode<'a> {
     raw: &'a KdlNode,
     tag: Option<NodeTag>,
+    args: Option<NodeId>,
+    props: Option<NodeId>,
+}
+
+#[derive(Debug)]
+pub struct BnyArgument<'a> {
+    raw: &'a KdlEntry,
+}
+
+#[derive(Debug)]
+pub struct BnyProperty<'a> {
+    name: &'a KdlIdentifier,
+    raw: &'a KdlEntry,
 }
 
 /// Diagnostic errors from various sources
@@ -32,17 +45,39 @@ pub enum Error {
 
 impl<'a> BnyNode<'a> {
     // Generate arena node only, not props/entries
-    fn from_kdl_node(raw: &'a KdlNode) -> (Self, Vec<Error>) {
+    fn from_kdl_node(
+        raw: &'a KdlNode,
+        args: Option<NodeId>,
+        props: Option<NodeId>,
+    ) -> (Self, Vec<Error>) {
         match raw.ty().map(|m| m.try_into().map_err(Error::Tag)) {
             Some(Ok(tag)) => (
                 Self {
                     raw,
                     tag: Some(tag),
+                    args,
+                    props,
                 },
                 vec![],
             ),
-            Some(Err(e)) => (Self { raw, tag: None }, vec![e]),
-            None => (Self { raw, tag: None }, vec![]),
+            Some(Err(e)) => (
+                Self {
+                    raw,
+                    tag: None,
+                    args,
+                    props,
+                },
+                vec![e],
+            ),
+            None => (
+                Self {
+                    raw,
+                    tag: None,
+                    args,
+                    props,
+                },
+                vec![],
+            ),
         }
     }
 }
@@ -59,6 +94,11 @@ pub struct BnyDocument {
 pub struct BnyResult<'a> {
     doc: &'a BnyDocument,
     arena: Arena<BnyNode<'a>>,
+
+    // all arguments
+    args: Arena<BnyArgument<'a>>,
+    props: Arena<BnyProperty<'a>>,
+
     pub diagnostics: Vec<Error>,
 }
 
@@ -84,10 +124,47 @@ impl BnyDocument {
     fn process_node<'a>(
         &self,
         arena: &mut Arena<BnyNode<'a>>,
+        args: &mut Arena<BnyArgument<'a>>,
+        props: &mut Arena<BnyProperty<'a>>,
         raw: &'a KdlNode,
         parent_id: Option<NodeId>,
     ) -> Vec<Error> {
-        let (node, mut diagnostics) = BnyNode::from_kdl_node(raw);
+        let mut args_id: Option<NodeId> = None;
+        let mut args_id_first: Option<NodeId> = None;
+
+        let mut props_id: Option<NodeId> = None;
+        let mut props_id_first: Option<NodeId> = None;
+
+        for entry in raw.entries().iter().filter(|e| !e.is_empty()) {
+            match entry.name() {
+                // Property
+                Some(name) => {
+                    let prop = BnyProperty { name, raw: entry };
+                    props_id = match props_id {
+                        Some(id) => Some(id.insert_after_value(prop, props)),
+                        None => {
+                            let id = props.new_node(prop);
+                            props_id_first = Some(id);
+                            props_id_first
+                        }
+                    }
+                }
+
+                // Argument
+                None => {
+                    let arg = BnyArgument { raw: entry };
+                    args_id = match args_id {
+                        Some(id) => Some(id.insert_after_value(arg, args)),
+                        None => {
+                            let id = args.new_node(arg);
+                            args_id_first = Some(id);
+                            args_id_first
+                        }
+                    }
+                }
+            }
+        }
+        let (node, mut diagnostics) = BnyNode::from_kdl_node(raw, args_id_first, props_id_first);
 
         // Append into the parent scope if provided or create a new node
         let parent = if let Some(pid) = parent_id {
@@ -110,7 +187,7 @@ impl BnyDocument {
             parent_ref
                 .raw
                 .iter_children()
-                .flat_map(|n| self.process_node(arena, n, Some(parent))),
+                .flat_map(|n| self.process_node(arena, args, props, n, Some(parent))),
         );
 
         diagnostics
@@ -120,16 +197,21 @@ impl BnyDocument {
     /// own pass
     pub fn process<'a>(&'a self) -> BnyResult<'a> {
         let mut arena = Arena::new();
+        let mut args = Arena::new();
+        let mut props = Arena::new();
+
         let diagnostics = self
             .doc
             .nodes()
             .iter()
-            .flat_map(|n| self.process_node(&mut arena, n, None))
+            .flat_map(|n| self.process_node(&mut arena, &mut args, &mut props, n, None))
             .collect_vec();
 
         BnyResult {
             doc: self,
             arena,
+            args,
+            props,
             diagnostics,
         }
     }
@@ -149,6 +231,7 @@ mod tests {
 "#;
         let doc = BnyDocument::new(&input).expect("unable to load doc");
         let res = doc.process();
+        eprintln!("arg set: {:?}", res.args);
         assert_eq!(res.diagnostics.len(), 0);
         assert!(res.is_valid());
     }
