@@ -236,9 +236,6 @@ impl BnyDocument {
         }
         let (node, mut diagnostics) = BnyNode::from_kdl_node(raw, args_id_first, props_id_first);
 
-        // steal the children now
-        let children = raw.iter_children().collect_vec();
-
         // Append into the parent scope if provided or create a new node
         let parent = if let Some(pid) = parent_id {
             pid.append_value(node, arena)
@@ -247,8 +244,7 @@ impl BnyDocument {
         };
 
         diagnostics.extend(
-            children
-                .into_iter()
+            raw.iter_children()
                 .flat_map(|n| self.process_node(arena, args, props, n, Some(parent))),
         );
 
