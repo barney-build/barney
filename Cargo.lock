@@ -130,6 +130,7 @@ dependencies = [
 name = "bny_syntax"
 version = "0.1.0"
 dependencies = [
+ "indextree",
  "itertools",
  "kdl",
  "miette",
@@ -368,6 +369,27 @@ name = "icu_segmenter_data"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "913a7d294ad056474749152107309fdee3ec17d2482d1ab70fdc61a81c64b9a3"
+
+[[package]]
+name = "indextree"
+version = "4.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3662f57019121dcb767b3d68df6868daf61c8e2ec8205709aea7e75b301a4ecc"
+dependencies = [
+ "indextree-macros",
+ "serde",
+]
+
+[[package]]
+name = "indextree-macros"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "275f822f43b20b95514c355642157dd8e8214ac62592969e8339d3ebcdacb808"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
 
 [[package]]
 name = "indicatif"
