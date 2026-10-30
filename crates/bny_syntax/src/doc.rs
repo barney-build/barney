@@ -8,7 +8,7 @@ use std::vec;
 use indextree::{Arena, NodeId};
 use itertools::Itertools;
 use kdl::{KdlDocument, KdlError, KdlNode};
-use miette::Diagnostic;
+use miette::{Diagnostic, SourceOffset, SourceSpan};
 use thiserror::Error;
 
 use crate::{NodeTag, ProcessedValue};
@@ -18,15 +18,18 @@ pub struct BnyNode {
     tag: Option<NodeTag>,
     args: Option<NodeId>,
     props: Option<NodeId>,
+    span: SourceSpan,
 }
 
 pub struct BnyArgument {
     value: ProcessedValue,
+    span: SourceSpan,
 }
 
 pub struct BnyProperty {
     name: String,
     value: ProcessedValue,
+    span: SourceSpan,
 }
 
 /// Diagnostic errors from various sources
@@ -56,6 +59,7 @@ impl<'a> BnyNode {
                     tag: Some(tag),
                     args,
                     props,
+                    span: raw.span(),
                 },
                 vec![],
             ),
@@ -65,6 +69,7 @@ impl<'a> BnyNode {
                     tag: None,
                     args,
                     props,
+                    span: raw.span(),
                 },
                 vec![e],
             ),
@@ -74,6 +79,7 @@ impl<'a> BnyNode {
                     tag: None,
                     args,
                     props,
+                    span: raw.span(),
                 },
                 vec![],
             ),
@@ -91,6 +97,7 @@ pub struct BnyDocument {
 /// A BnyResult yields diagnostics from parsing a `.bny` file
 pub struct BnyResult {
     arena: Arena<BnyNode>,
+    span: SourceSpan,
 
     // all arguments
     args: Arena<BnyArgument>,
@@ -152,6 +159,11 @@ impl<'a> BnyNodeRef<'a> {
             })
         })
     }
+
+    /// Returns node span
+    pub fn span(&self) -> SourceSpan {
+        self.context.arena[self.id].get().span
+    }
 }
 
 impl<'a> BnyResult {
@@ -162,6 +174,10 @@ impl<'a> BnyResult {
             .iter()
             .find(|f| matches!(f.severity(), Some(miette::Severity::Error)))
             .is_none()
+    }
+
+    pub fn span(&self) -> SourceSpan {
+        self.span
     }
 
     /// Iterate the built nodes
@@ -207,6 +223,7 @@ impl BnyDocument {
                     let prop = BnyProperty {
                         name: name.value().to_owned(),
                         value: entry.value().into(),
+                        span: raw.span(),
                     };
                     props_id = match props_id {
                         Some(id) => Some(id.insert_after_value(prop, props)),
@@ -222,6 +239,7 @@ impl BnyDocument {
                 None => {
                     let arg = BnyArgument {
                         value: entry.value().into(),
+                        span: raw.span(),
                     };
                     args_id = match args_id {
                         Some(id) => Some(id.insert_after_value(arg, args)),
@@ -262,6 +280,7 @@ impl BnyDocument {
             Ok(d) => d,
             Err(e) => {
                 return BnyResult {
+                    span: SourceSpan::new(SourceOffset::from_location(&self.contents, 0, 0), 0),
                     arena,
                     args,
                     props,
@@ -277,6 +296,7 @@ impl BnyDocument {
             .collect_vec();
 
         BnyResult {
+            span: doc.span(),
             arena,
             args,
             props,
@@ -290,6 +310,10 @@ impl BnyArgument {
     pub fn value(&self) -> &ProcessedValue {
         &self.value
     }
+
+    pub fn span(&self) -> SourceSpan {
+        self.span
+    }
 }
 
 impl BnyProperty {
@@ -301,6 +325,10 @@ impl BnyProperty {
     /// Property value
     pub fn value(&self) -> &ProcessedValue {
         &self.value
+    }
+
+    pub fn span(&self) -> SourceSpan {
+        self.span
     }
 }
 #[cfg(test)]
