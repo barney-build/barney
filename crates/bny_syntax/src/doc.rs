@@ -3,7 +3,6 @@
 
 //! Syntax document
 
-use std::sync::Arc;
 
 use kdl::{KdlDocument, KdlError};
 use miette::{Diagnostic, MietteDiagnostic};
@@ -15,7 +14,6 @@ use crate::ProcessedNode;
 /// a set of nodes. Largely this is identical to a `kdl` file
 /// but with the core tags etc locked in
 pub struct BnyDocument {
-    data: Arc<String>,
     doc: KdlDocument,
 }
 
@@ -48,12 +46,15 @@ impl<'a> BnyResult<'a> {
 }
 
 impl BnyDocument {
-    pub fn new(data: Arc<String>) -> Result<Self, Error> {
-        let doc = KdlDocument::parse_v2(&data)?;
-        Ok(Self { data, doc })
+    /// Returns a new BnyDocument.
+    /// Note: All KDL errors / processing happens here.
+    pub fn new(data: &str) -> Result<Self, Error> {
+        let doc = KdlDocument::parse_v2(data)?;
+        Ok(Self { doc })
     }
 
-    /// Return all processed nodes and any diagnostics
+    /// Return all processed nodes and any diagnostics from our
+    /// own pass
     pub fn process<'a>(&self) -> BnyResult<'a> {
         BnyResult {
             nodes: vec![],
@@ -64,8 +65,6 @@ impl BnyDocument {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::BnyDocument;
 
     #[test]
@@ -76,7 +75,7 @@ mod tests {
     }
 }
 "#;
-        let doc = BnyDocument::new(Arc::new(input.to_owned())).expect("unable to load doc");
+        let doc = BnyDocument::new(&input).expect("unable to load doc");
         let res = doc.process();
         assert_eq!(res.diagnostics.len(), 0);
         assert!(res.is_valid());
