@@ -12,6 +12,9 @@ use thiserror::Error;
 mod spec;
 pub use spec::*;
 
+mod doc;
+pub use doc::*;
+
 mod entry;
 pub use entry::*;
 
