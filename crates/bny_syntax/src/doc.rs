@@ -29,6 +29,8 @@ pub struct BnyArgument {
 pub struct BnyProperty {
     name: String,
     value: ProcessedValue,
+    name_span: SourceSpan,
+    value_span: SourceSpan,
     span: SourceSpan,
 }
 
@@ -95,7 +97,8 @@ pub struct BnyDocument {
 }
 
 /// A BnyResult yields diagnostics from parsing a `.bny` file
-pub struct BnyResult {
+pub struct BnyResult<'a> {
+    doc: &'a BnyDocument,
     arena: Arena<BnyNode>,
     span: SourceSpan,
 
@@ -109,7 +112,7 @@ pub struct BnyResult {
 // Contextual handle to a node
 pub struct BnyNodeRef<'a> {
     id: NodeId,
-    context: &'a BnyResult,
+    context: &'a BnyResult<'a>,
     prop_id: Option<NodeId>,
     arg_id: Option<NodeId>,
 }
@@ -166,7 +169,7 @@ impl<'a> BnyNodeRef<'a> {
     }
 }
 
-impl<'a> BnyResult {
+impl<'a> BnyResult<'a> {
     /// Returns true if the result means we've got legal parsing,
     /// ie diagnostics are non fatal
     pub fn is_valid(&self) -> bool {
@@ -191,9 +194,14 @@ impl<'a> BnyResult {
             })
         })
     }
+
+    /// Return underlying document
+    pub fn doc(&self) -> &BnyDocument {
+        self.doc
+    }
 }
 
-impl BnyDocument {
+impl<'a> BnyDocument {
     /// Returns a new BnyDocument.
     /// Note: All KDL errors / processing happens here.
     pub fn new(data: &str) -> Self {
@@ -223,7 +231,9 @@ impl BnyDocument {
                     let prop = BnyProperty {
                         name: name.value().to_owned(),
                         value: entry.value().into(),
-                        span: raw.span(),
+                        span: entry.span(),
+                        name_span: name.span(),
+                        value_span: entry.span(),
                     };
                     props_id = match props_id {
                         Some(id) => Some(id.insert_after_value(prop, props)),
@@ -239,7 +249,7 @@ impl BnyDocument {
                 None => {
                     let arg = BnyArgument {
                         value: entry.value().into(),
-                        span: raw.span(),
+                        span: entry.span(),
                     };
                     args_id = match args_id {
                         Some(id) => Some(id.insert_after_value(arg, args)),
@@ -271,7 +281,7 @@ impl BnyDocument {
 
     /// Return all processed nodes and any diagnostics from our
     /// own pass
-    pub fn process(&self) -> BnyResult {
+    pub fn process(&'a self) -> BnyResult<'a> {
         let mut arena = Arena::new();
         let mut args = Arena::new();
         let mut props = Arena::new();
@@ -280,6 +290,7 @@ impl BnyDocument {
             Ok(d) => d,
             Err(e) => {
                 return BnyResult {
+                    doc: self,
                     span: SourceSpan::new(SourceOffset::from_location(&self.contents, 0, 0), 0),
                     arena,
                     args,
@@ -296,6 +307,7 @@ impl BnyDocument {
             .collect_vec();
 
         BnyResult {
+            doc: self,
             span: doc.span(),
             arena,
             args,
@@ -327,8 +339,19 @@ impl BnyProperty {
         &self.value
     }
 
+    /// Return span for the whole property pair
     pub fn span(&self) -> SourceSpan {
         self.span
+    }
+
+    /// Return span for the identifier itself
+    pub fn name_span(&self) -> SourceSpan {
+        self.name_span
+    }
+
+    /// Return span for the value itself
+    pub fn value_span(&self) -> SourceSpan {
+        self.value_span
     }
 }
 #[cfg(test)]
