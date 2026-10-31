@@ -13,7 +13,8 @@ use thiserror::Error;
 
 use crate::{NodeTag, ProcessedValue};
 
-pub struct BnyNode {
+/// Internal node storage within the BnyTree arena
+struct BnyNode {
     name: String,
     tag: Option<NodeTag>,
     args: Option<NodeId>,
@@ -21,11 +22,13 @@ pub struct BnyNode {
     span: SourceSpan,
 }
 
+/// An argument as provided to a node
 pub struct BnyArgument {
     value: ProcessedValue,
     span: SourceSpan,
 }
 
+/// A property of a node
 pub struct BnyProperty {
     name: String,
     value: ProcessedValue,
@@ -89,16 +92,19 @@ impl<'a> BnyNode {
     }
 }
 
-/// A BnyDocument is used for parsing a `bny` file into
+/// A BnySpec is used for parsing a `bny` file into
 /// a set of nodes. Largely this is identical to a `kdl` file
 /// but with the core tags etc locked in
-pub struct BnyDocument {
+pub struct BnySpec {
     contents: String,
 }
 
-/// A BnyResult yields diagnostics from parsing a `.bny` file
-pub struct BnyResult<'a> {
-    doc: &'a BnyDocument,
+/// A BnyTree is our IR format for any `.bny` file, currently fed by KDL
+///
+/// A Tree structure is generated along with any diagnostics encountered
+/// in processing.
+pub struct BnyTree<'a> {
+    spec: &'a BnySpec,
     arena: Arena<BnyNode>,
     span: SourceSpan,
 
@@ -106,13 +112,13 @@ pub struct BnyResult<'a> {
     args: Arena<BnyArgument>,
     props: Arena<BnyProperty>,
 
-    pub diagnostics: Vec<Error>,
+    diagnostics: Vec<Error>,
 }
 
-// Contextual handle to a node
+/// Public contextual view of a node
 pub struct BnyNodeRef<'a> {
     id: NodeId,
-    context: &'a BnyResult<'a>,
+    tree: &'a BnyTree<'a>,
     prop_id: Option<NodeId>,
     arg_id: Option<NodeId>,
 }
@@ -120,7 +126,7 @@ pub struct BnyNodeRef<'a> {
 impl<'a> BnyNodeRef<'a> {
     /// Retrieve name by ref
     pub fn name(&self) -> &str {
-        self.context
+        self.tree
             .arena
             .get_data(self.id)
             .map(|n| n.name.as_str())
@@ -129,7 +135,7 @@ impl<'a> BnyNodeRef<'a> {
 
     /// Retrieve the node tag
     pub fn tag(&self) -> Option<NodeTag> {
-        self.context
+        self.tree
             .arena
             .get_data(self.id)
             .and_then(|n| n.tag.clone())
@@ -139,24 +145,24 @@ impl<'a> BnyNodeRef<'a> {
     pub fn properties(&self) -> impl Iterator<Item = &'a BnyProperty> {
         self.prop_id
             .into_iter()
-            .flat_map(move |id| id.following_siblings(&self.context.props))
-            .flat_map(move |id| self.context.props.get_data(id))
+            .flat_map(move |id| id.following_siblings(&self.tree.props))
+            .flat_map(move |id| self.tree.props.get_data(id))
     }
 
     /// Get the arguments
     pub fn arguments(&self) -> impl Iterator<Item = &'a BnyArgument> {
         self.arg_id
             .into_iter()
-            .flat_map(move |id| id.following_siblings(&self.context.args))
-            .flat_map(move |id| self.context.args.get_data(id))
+            .flat_map(move |id| id.following_siblings(&self.tree.args))
+            .flat_map(move |id| self.tree.args.get_data(id))
     }
 
     // Yield children of this node
     pub fn children(&self) -> impl Iterator<Item = BnyNodeRef<'a>> {
-        self.id.children(&self.context.arena).flat_map(move |id| {
-            self.context.arena.get_data(id).map(move |n| BnyNodeRef {
+        self.id.children(&self.tree.arena).flat_map(move |id| {
+            self.tree.arena.get_data(id).map(move |n| BnyNodeRef {
                 id,
-                context: self.context,
+                tree: self.tree,
                 prop_id: n.props,
                 arg_id: n.args,
             })
@@ -165,11 +171,11 @@ impl<'a> BnyNodeRef<'a> {
 
     /// Returns node span
     pub fn span(&self) -> SourceSpan {
-        self.context.arena[self.id].get().span
+        self.tree.arena[self.id].get().span
     }
 }
 
-impl<'a> BnyResult<'a> {
+impl<'a> BnyTree<'a> {
     /// Returns true if the result means we've got legal parsing,
     /// ie diagnostics are non fatal
     pub fn is_valid(&self) -> bool {
@@ -179,6 +185,12 @@ impl<'a> BnyResult<'a> {
             .is_none()
     }
 
+    /// Access the diagnostics
+    pub fn diagnostics(&self) -> &[Error] {
+        self.diagnostics.iter().as_slice()
+    }
+
+    /// Complete source span
     pub fn span(&self) -> SourceSpan {
         self.span
     }
@@ -188,21 +200,21 @@ impl<'a> BnyResult<'a> {
         self.arena.roots().flat_map(|id| {
             self.arena.get_data(id).map(|a| BnyNodeRef {
                 id,
-                context: self,
+                tree: self,
                 prop_id: a.props,
                 arg_id: a.args,
             })
         })
     }
 
-    /// Return underlying document
-    pub fn doc(&self) -> &BnyDocument {
-        self.doc
+    /// Return underlying spec file
+    pub fn spec(&self) -> &BnySpec {
+        self.spec
     }
 }
 
-impl<'a> BnyDocument {
-    /// Returns a new BnyDocument.
+impl<'a> BnySpec {
+    /// Returns a new BnySpec.
     /// Note: All KDL errors / processing happens here.
     pub fn new(data: &str) -> Self {
         Self {
@@ -281,7 +293,7 @@ impl<'a> BnyDocument {
 
     /// Return all processed nodes and any diagnostics from our
     /// own pass
-    pub fn process(&'a self) -> BnyResult<'a> {
+    pub fn process(&'a self) -> BnyTree<'a> {
         let mut arena = Arena::new();
         let mut args = Arena::new();
         let mut props = Arena::new();
@@ -289,8 +301,8 @@ impl<'a> BnyDocument {
         let doc = match KdlDocument::parse_v2(&self.contents) {
             Ok(d) => d,
             Err(e) => {
-                return BnyResult {
-                    doc: self,
+                return BnyTree {
+                    spec: self,
                     span: SourceSpan::new(SourceOffset::from_location(&self.contents, 0, 0), 0),
                     arena,
                     args,
@@ -306,8 +318,8 @@ impl<'a> BnyDocument {
             .flat_map(|n| self.process_node(&mut arena, &mut args, &mut props, n, None))
             .collect_vec();
 
-        BnyResult {
-            doc: self,
+        BnyTree {
+            spec: self,
             span: doc.span(),
             arena,
             args,
@@ -356,7 +368,7 @@ impl BnyProperty {
 }
 #[cfg(test)]
 mod tests {
-    use crate::BnyDocument;
+    use crate::BnySpec;
 
     #[test]
     fn new_doc_simple() {
@@ -366,7 +378,7 @@ mod tests {
     }
 }
 "#;
-        let doc = BnyDocument::new(&input);
+        let doc = BnySpec::new(&input);
         let res = doc.process();
         assert_eq!(res.diagnostics.len(), 0);
         assert!(res.is_valid());
