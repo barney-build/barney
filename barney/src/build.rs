@@ -5,21 +5,16 @@
 
 use std::path::Path;
 
-use bny_recipe::bootstrap::BootstrapSpec;
 use miette::{Context, IntoDiagnostic};
-use tracing::info;
 
 // Load bootstrap config, handle emission of miette report if needed
 pub async fn run_command(path: &Path) -> Result<(), miette::Report> {
     // Ensure we have a real path firstly!
-    let path = path
+    let _path = path
         .canonicalize()
         .into_diagnostic()
         .wrap_err_with(|| format!("Failed to resolve path: {path:?}"))?;
-    let distro = BootstrapSpec::from_path(&path)?;
-    info!(config = ?path, "Loaded distro configuration: {distro:#?}");
 
-    println!("Distro loaded: {distro:#?}");
-
+    eprintln!("Not yet implemented");
     Ok(())
 }

@@ -3,7 +3,6 @@ resolver = "3"
 
 members = [
     "crates/bny_syntax",
-    "crates/bny_recipe",
     "barney",
 ]
 
