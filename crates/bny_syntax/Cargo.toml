@@ -8,5 +8,6 @@ rust-version = "1.95"
 indextree.workspace = true
 itertools.workspace = true
 kdl = { workspace = true, features = ["span"] }
+lasso = { workspace = true, features = ["inline-more"] }
 miette.workspace = true
 thiserror.workspace = true

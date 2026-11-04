@@ -9,6 +9,9 @@ mod prop;
 use miette::Diagnostic;
 pub use prop::BnyProperty;
 
+mod interner;
+pub use interner::{BnyInterner, StringId};
+
 mod spec;
 pub use spec::BnySpec;
 

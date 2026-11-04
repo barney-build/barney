@@ -10,13 +10,14 @@ use itertools::Itertools;
 use kdl::{KdlDocument, KdlNode};
 use miette::{SourceOffset, SourceSpan};
 
-use crate::{BnyArgument, BnyProperty, BnyTree, Error, tree::BnyNode};
+use crate::{BnyArgument, BnyProperty, BnyTree, Error, interner::BnyInterner, tree::BnyNode};
 
 /// A BnySpec is used for parsing a `bny` file into
 /// a set of nodes. Largely this is identical to a `kdl` file
 /// but with the core tags etc locked in
 pub struct BnySpec {
     contents: String,
+    intern: BnyInterner,
 }
 
 impl<'a> BnySpec {
@@ -25,7 +26,21 @@ impl<'a> BnySpec {
     pub fn new(data: &str) -> Self {
         Self {
             contents: data.to_owned(),
+            intern: BnyInterner::default(),
         }
+    }
+
+    /// Mutable access for the interner
+    ///
+    /// This allows layered implementation to share the same
+    /// table.
+    pub fn interner_mut(&mut self) -> &mut BnyInterner {
+        &mut self.intern
+    }
+
+    /// Read-only access to the interner
+    pub fn interner(&mut self) -> &BnyInterner {
+        &self.intern
     }
 
     fn process_node(
