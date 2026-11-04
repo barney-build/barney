@@ -14,3 +14,6 @@ pub use schema::{SchemaDef, SchemaRef};
 
 mod node;
 pub use node::NodeDef;
+
+mod rule;
+pub use rule::Rule;
