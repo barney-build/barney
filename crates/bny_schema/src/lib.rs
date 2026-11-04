@@ -32,8 +32,10 @@ mod tests {
         #[repr(u16)]
         pub enum RecipeKeys {
             MetaNode,
-            MetaNodeName,
+            // MetaNodeName,
             Build,
+            LinksNode,
+            LinksNodeBugs,
         }
 
         impl<'a> SchemaKey<'a> for RecipeKeys {
@@ -44,15 +46,19 @@ mod tests {
             fn name(&self) -> SchemaName<'a> {
                 match self {
                     RecipeKeys::MetaNode => SchemaName::Explicit("meta"),
-                    RecipeKeys::MetaNodeName => SchemaName::Explicit("name"),
+                    // RecipeKeys::MetaNodeName => SchemaName::Explicit("name"),
                     RecipeKeys::Build => SchemaName::Explicit("build"),
+                    RecipeKeys::LinksNode => SchemaName::Explicit("links"),
+                    RecipeKeys::LinksNodeBugs => SchemaName::Explicit("bugs"),
                 }
             }
         }
 
         pub static ID: SchemaRef = SchemaRef("barney.test.pkg.schema");
         pub static SCHEMA: SchemaDef<RecipeKeys> = SchemaDef::new(ID).children(&[
-            &node_def(RecipeKeys::MetaNode),
+            &node_def(RecipeKeys::MetaNode)
+                .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNode)
+                    .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNodeBugs)]))])),
             &node_def(RecipeKeys::Build).children(Rule::External(test_script_schema::ID)),
         ]);
     }
