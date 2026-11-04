@@ -11,3 +11,6 @@ pub use key::*;
 
 mod schema;
 pub use schema::{SchemaDef, SchemaRef};
+
+mod node;
+pub use node::NodeDef;
