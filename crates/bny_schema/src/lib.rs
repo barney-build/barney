@@ -102,6 +102,6 @@ mod tests {
             SchemaRef("barney.test.script.schema")
         );
         eprintln!("Recipe structure: {:?}", test_recipe_schema::SCHEMA);
-        eprintln!("Script tructure: {:?}", test_script_schema::SCHEMA);
+        eprintln!("Script structure: {:?}", test_script_schema::SCHEMA);
     }
 }
