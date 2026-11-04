@@ -8,3 +8,6 @@
 
 mod key;
 pub use key::*;
+
+mod schema;
+pub use schema::{SchemaDef, SchemaRef};
