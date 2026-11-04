@@ -40,4 +40,8 @@ impl<'a, T: SchemaKey<'a>> SchemaDef<'a, T> {
         self.children = Some(children);
         self
     }
+
+    pub fn nodes(&self) -> &'a [&'a NodeDef<'a, T>] {
+        self.children.unwrap_or_default()
+    }
 }

@@ -6,6 +6,9 @@
 //! The bny_schema crate is built atop bny_syntax to
 //! provide validation of `.bny` files and rich diagnostics.
 
+mod compiled;
+pub use compiled::{BnySchema, BnySchemaId};
+
 mod key;
 pub use key::*;
 
@@ -18,9 +21,14 @@ pub use node::{NodeDef, node_def};
 mod rule;
 pub use rule::Rule;
 
+mod spec;
+pub use spec::NodeSpec;
+
 #[cfg(test)]
 mod tests {
-    use crate::SchemaRef;
+    use bny_syntax::BnyInterner;
+
+    use crate::{BnySchema, SchemaRef};
 
     mod test_recipe_schema {
         use crate::{
@@ -109,5 +117,11 @@ mod tests {
         );
         eprintln!("Recipe structure: {:?}", test_recipe_schema::SCHEMA);
         eprintln!("Script structure: {:?}", test_script_schema::SCHEMA);
+
+        let mut sch1 = BnySchema::new();
+        let mut intern = BnyInterner::default();
+        sch1.bind_from_def(&mut intern, &test_recipe_schema::SCHEMA);
+        eprintln!("intern: {intern:?}");
+        eprintln!("schema defs: {sch1:?}");
     }
 }
