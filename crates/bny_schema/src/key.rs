@@ -8,8 +8,8 @@
 
 /// Key lookup trait for runtime analysis
 pub trait SchemaKey<'a>: Copy {
-    /// Return the symbolic identity
-    fn identity(self) -> u16;
+    /// Return the symbolic identity (author bound)
+    fn symbolic_id(self) -> u16;
 
     /// Return a name matching mechanism
     fn name(&self) -> SchemaName<'a>;
