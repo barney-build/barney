@@ -5,3 +5,6 @@
 //!
 //! The bny_schema crate is built atop bny_syntax to
 //! provide validation of `.bny` files and rich diagnostics.
+
+mod key;
+pub use key::*;
