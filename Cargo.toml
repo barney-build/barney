@@ -11,6 +11,7 @@ members = [
 indextree = "4.9.2"
 itertools = "0.15.0"
 kdl = "6.5.0"
+lasso = { version = "0.7.3", features = ["inline-more"] }
 miette = { version = "7.6.0" }
 thiserror = "2.0.20"
 tracing = "0.1.44"

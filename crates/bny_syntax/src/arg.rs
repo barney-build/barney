@@ -8,6 +8,7 @@ use miette::SourceSpan;
 use crate::ProcessedValue;
 
 /// An argument as provided to a node
+#[derive(Debug)]
 pub struct BnyArgument {
     pub(super) value: ProcessedValue,
     pub(super) span: SourceSpan,

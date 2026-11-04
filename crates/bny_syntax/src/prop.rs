@@ -5,11 +5,12 @@
 
 use miette::SourceSpan;
 
-use crate::ProcessedValue;
+use crate::{ProcessedValue, StringId};
 
 /// A property of a node
+#[derive(Debug)]
 pub struct BnyProperty {
-    pub(super) name: String,
+    pub(super) name: StringId,
     pub(super) value: ProcessedValue,
     pub(super) name_span: SourceSpan,
     pub(super) value_span: SourceSpan,
@@ -18,8 +19,8 @@ pub struct BnyProperty {
 
 impl BnyProperty {
     /// Property name
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> StringId {
+        self.name
     }
 
     /// Property value

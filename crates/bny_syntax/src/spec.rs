@@ -15,9 +15,9 @@ use crate::{BnyArgument, BnyProperty, BnyTree, Error, interner::BnyInterner, tre
 /// A BnySpec is used for parsing a `bny` file into
 /// a set of nodes. Largely this is identical to a `kdl` file
 /// but with the core tags etc locked in
+#[derive(Debug)]
 pub struct BnySpec {
     contents: String,
-    intern: BnyInterner,
 }
 
 impl<'a> BnySpec {
@@ -26,21 +26,7 @@ impl<'a> BnySpec {
     pub fn new(data: &str) -> Self {
         Self {
             contents: data.to_owned(),
-            intern: BnyInterner::default(),
         }
-    }
-
-    /// Mutable access for the interner
-    ///
-    /// This allows layered implementation to share the same
-    /// table.
-    pub fn interner_mut(&mut self) -> &mut BnyInterner {
-        &mut self.intern
-    }
-
-    /// Read-only access to the interner
-    pub fn interner(&mut self) -> &BnyInterner {
-        &self.intern
     }
 
     fn process_node(
@@ -50,6 +36,7 @@ impl<'a> BnySpec {
         props: &mut Arena<BnyProperty>,
         raw: &KdlNode,
         parent_id: Option<NodeId>,
+        intern: &mut BnyInterner,
     ) -> Vec<Error> {
         let mut args_id: Option<NodeId> = None;
         let mut args_id_first: Option<NodeId> = None;
@@ -62,7 +49,7 @@ impl<'a> BnySpec {
                 // Property
                 Some(name) => {
                     let prop = BnyProperty {
-                        name: name.value().to_owned(),
+                        name: intern.intern(name.value()),
                         value: entry.value().into(),
                         span: entry.span(),
                         name_span: name.span(),
@@ -95,7 +82,7 @@ impl<'a> BnySpec {
                 }
             }
         }
-        let node = BnyNode::from_kdl_node(raw, args_id_first, props_id_first);
+        let node = BnyNode::from_kdl_node(raw, args_id_first, props_id_first, intern);
 
         // Append into the parent scope if provided or create a new node
         let parent = if let Some(pid) = parent_id {
@@ -105,13 +92,14 @@ impl<'a> BnySpec {
         };
 
         raw.iter_children()
-            .flat_map(|n| self.process_node(arena, args, props, n, Some(parent)))
+            .flat_map(|n| self.process_node(arena, args, props, n, Some(parent), intern))
             .collect_vec()
     }
 
     /// Return all processed nodes and any diagnostics from our
     /// own pass
-    pub fn process(&'a self) -> BnyTree<'a> {
+    /// Mutability is required for string interning
+    pub fn process(&'a self, intern: &mut BnyInterner) -> BnyTree<'a> {
         let mut arena = Arena::new();
         let mut args = Arena::new();
         let mut props = Arena::new();
@@ -133,7 +121,7 @@ impl<'a> BnySpec {
         let diagnostics = doc
             .nodes()
             .iter()
-            .flat_map(|n| self.process_node(&mut arena, &mut args, &mut props, n, None))
+            .flat_map(|n| self.process_node(&mut arena, &mut args, &mut props, n, None, intern))
             .collect_vec();
 
         BnyTree {

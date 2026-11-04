@@ -10,7 +10,7 @@ use lasso::{Rodeo, Spur};
 /// Internally we're just using `lasso::Rodeo` to encapsulate
 /// the API and hide it from external consumers. Right this moment
 /// we do not use the multithreaded implementation.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BnyInterner {
     intern: Rodeo,
 }

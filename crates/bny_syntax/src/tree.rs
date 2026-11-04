@@ -7,12 +7,12 @@ use indextree::{Arena, NodeId};
 use kdl::KdlNode;
 use miette::{Diagnostic, SourceSpan};
 
-use crate::{BnyArgument, BnyProperty, BnySpec, Error};
+use crate::{BnyArgument, BnyInterner, BnyProperty, BnySpec, Error, StringId};
 
 /// Internal node storage within the BnyTree arena
 pub(super) struct BnyNode {
-    pub(super) name: String,
-    pub(super) tag: Option<String>,
+    pub(super) name: StringId,
+    pub(super) tag: Option<StringId>,
     pub(super) args: Option<NodeId>,
     pub(super) props: Option<NodeId>,
     pub(super) span: SourceSpan,
@@ -24,10 +24,14 @@ impl<'a> BnyNode {
         raw: &'a KdlNode,
         args: Option<NodeId>,
         props: Option<NodeId>,
+        intern: &'a mut BnyInterner,
     ) -> Self {
+        let name = intern.intern(raw.name().value());
+        let tag = raw.ty().map(|i| intern.intern(i.value()));
+
         Self {
-            name: raw.name().value().to_owned(),
-            tag: raw.ty().map(|i| i.value().to_owned()),
+            name,
+            tag,
             args,
             props,
             span: raw.span(),
@@ -61,20 +65,13 @@ pub struct BnyNodeRef<'a> {
 
 impl<'a> BnyNodeRef<'a> {
     /// Retrieve name by ref
-    pub fn name(&self) -> &str {
-        self.tree
-            .arena
-            .get_data(self.id)
-            .map(|n| n.name.as_str())
-            .unwrap_or_default()
+    pub fn name(&self) -> StringId {
+        self.tree.arena[self.id].get().name
     }
 
     /// Retrieve the node tag
-    pub fn tag(&self) -> Option<&str> {
-        self.tree
-            .arena
-            .get_data(self.id)
-            .and_then(|b| b.tag.as_deref())
+    pub fn tag(&self) -> Option<StringId> {
+        self.tree.arena[self.id].get().tag
     }
 
     /// Find all properties
@@ -151,19 +148,35 @@ impl<'a> BnyTree<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::BnySpec;
+    use itertools::Itertools;
+
+    use crate::{BnyInterner, BnySpec};
 
     #[test]
     fn new_doc_simple() {
-        let input = r#"document {
+        let input = r#"document schema="is it though" {
     child_node prop=2 lol {
         list
     }
 }
 "#;
+
         let doc = BnySpec::new(&input);
-        let res = doc.process();
+        let mut it = BnyInterner::default();
+        let res = doc.process(&mut it);
         assert_eq!(res.diagnostics.len(), 0);
         assert!(res.is_valid());
+
+        let nodes = res.nodes().collect_vec();
+        let root = nodes.get(0).expect("no root of document");
+        let name = it.resolve(root.name());
+        assert_eq!(name, "document");
+        let props = root.properties().collect_vec();
+        assert_eq!(props.len(), 1);
+        let prop = props.get(0).unwrap();
+        let prop_name = it.resolve(prop.name());
+        assert_eq!(prop_name, "schema");
+        let prop_value = prop.value().as_string().expect("Should contain a string!");
+        assert_eq!(prop_value, "is it though");
     }
 }
