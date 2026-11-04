@@ -11,16 +11,17 @@
 use crate::{NodeDef, SchemaKey};
 
 /// Strong type for unique schema IDs / referencing
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SchemaRef<'a>(pub &'a str);
 
 /// A schema definition
+#[derive(Debug)]
 pub struct SchemaDef<'a, T: SchemaKey<'a>> {
     // identity
     id: SchemaRef<'a>,
 
     /// Our root level nodes
-    children: Option<&'a [NodeDef<'a, T>]>,
+    children: Option<&'a [&'a NodeDef<'a, T>]>,
 }
 
 impl<'a, T: SchemaKey<'a>> SchemaDef<'a, T> {
@@ -35,7 +36,7 @@ impl<'a, T: SchemaKey<'a>> SchemaDef<'a, T> {
     }
 
     /// Set the initial child nodes
-    pub const fn children(mut self, children: &'a [NodeDef<'a, T>]) -> Self {
+    pub const fn children(mut self, children: &'a [&'a NodeDef<'a, T>]) -> Self {
         self.children = Some(children);
         self
     }

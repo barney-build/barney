@@ -7,6 +7,7 @@ use crate::{NodeDef, SchemaKey, SchemaRef};
 
 /// Either a set of nodes from the current schema
 /// *or* an external schema must apply.
+#[derive(Debug)]
 pub enum Rule<'a, T: SchemaKey<'a>> {
     /// Match any of the given node definitions
     Nodes(&'a [&'a NodeDef<'a, T>]),
