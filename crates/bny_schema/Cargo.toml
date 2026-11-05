@@ -8,3 +8,4 @@ rust-version = "1.95"
 bny_syntax = { path = "../bny_syntax" }
 indextree.workspace = true
 itertools.workspace = true
+thiserror.workspace = true

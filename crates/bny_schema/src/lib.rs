@@ -24,11 +24,14 @@ pub use rule::Rule;
 mod spec;
 pub use spec::NodeSpec;
 
+mod registry;
+pub use registry::{RegistryError, SchemaRegistry};
+
 #[cfg(test)]
 mod tests {
     use bny_syntax::BnyInterner;
 
-    use crate::{BnySchema, SchemaRef};
+    use crate::{BnySchema, SchemaRef, SchemaRegistry};
 
     mod test_recipe_schema {
         use crate::{
@@ -118,10 +121,17 @@ mod tests {
         eprintln!("Recipe structure: {:?}", test_recipe_schema::SCHEMA);
         eprintln!("Script structure: {:?}", test_script_schema::SCHEMA);
 
-        let mut sch1 = BnySchema::new();
         let mut intern = BnyInterner::default();
-        sch1.bind_from_def(&mut intern, &test_recipe_schema::SCHEMA);
+        let schema = BnySchema::compile(&mut intern, &test_recipe_schema::SCHEMA);
         eprintln!("intern: {intern:?}");
-        eprintln!("schema defs: {sch1:?}");
+        eprintln!("schema defs: {schema:?}");
+
+        let mut reg = SchemaRegistry::new(test_recipe_schema::ID);
+        reg.install(schema)
+            .expect("Failed to install recipe schema");
+        reg.install(BnySchema::compile(&mut intern, &test_script_schema::SCHEMA))
+            .expect("Failed to install script schema");
+        let linked = reg.link(&mut intern).expect("Failed to link schemas");
+        eprintln!("linked: {linked:?}");
     }
 }

@@ -137,6 +137,9 @@ name = "bny_schema"
 version = "0.1.0"
 dependencies = [
  "bny_syntax",
+ "indextree",
+ "itertools",
+ "thiserror",
 ]
 
 [[package]]

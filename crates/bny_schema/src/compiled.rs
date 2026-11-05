@@ -3,7 +3,7 @@
 
 //! Compiled barney schema
 
-use bny_syntax::BnyInterner;
+use bny_syntax::{BnyInterner, StringId};
 use indextree::{Arena, NodeId};
 
 use crate::{Rule, SchemaDef, SchemaKey, spec::RuleSpec};
@@ -11,45 +11,50 @@ use crate::{Rule, SchemaDef, SchemaKey, spec::RuleSpec};
 /// A compiled bny schema representation
 #[derive(Debug)]
 pub struct BnySchema {
-    nodes: Arena<RuleSpec>,
+    pub(super) nodes: Arena<RuleSpec>,
+    id: StringId,
 }
+
 // Export type of nodes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BnySchemaId(NodeId);
 
 impl BnySchema {
-    pub fn new() -> Self {
-        Self {
-            nodes: Arena::new(),
-        }
-    }
-
     /// Add a rule node into the tree
     /// TODO: NodeSpec needs to include all PropertySpec/ArgSpec
-    fn add_rule(&mut self, spec: RuleSpec, parent: Option<BnySchemaId>) -> BnySchemaId {
+    fn add_rule(
+        nodes: &mut Arena<RuleSpec>,
+        spec: RuleSpec,
+        parent: Option<BnySchemaId>,
+    ) -> BnySchemaId {
         let id = if let Some(parent_id) = parent.map(|p| p.0) {
-            parent_id.append_value(spec, &mut self.nodes)
+            parent_id.append_value(spec, nodes)
         } else {
-            self.nodes.new_node(spec)
+            nodes.new_node(spec)
         };
-
-        eprintln!("{:#?}", id.debug_pretty_print(&self.nodes));
         BnySchemaId(id)
     }
 
+    /// Interned ID
+    pub fn id(&self) -> StringId {
+        self.id
+    }
+
     /// Build a BnySchema from a SchemaDef
-    pub fn bind_from_def<'a, T: SchemaKey<'a>>(
-        &mut self,
+    /// TODO: Shit the bed when we encounter duplicate symbolics
+    pub fn compile<'a, T: SchemaKey<'a>>(
         intern: &mut BnyInterner,
         schema_def: &'a SchemaDef<'a, T>,
-    ) {
+    ) -> BnySchema {
+        let mut nodes = Arena::new();
+
         let mut processing = Vec::new();
         let batch = schema_def.nodes().iter().rev().map(|n| (n, None));
         processing.extend(batch);
         while let Some((node, parent)) = processing.pop() {
             let spec = node.spec(intern);
             let rule = RuleSpec::MatchNode(spec);
-            let id = self.add_rule(rule, parent);
+            let id = Self::add_rule(&mut nodes, rule, parent);
 
             match node.child() {
                 Some(Rule::Nodes(nodes)) => {
@@ -57,16 +62,14 @@ impl BnySchema {
                 }
                 Some(Rule::External(schema_ref)) => {
                     let sym = intern.intern(schema_ref.0);
-                    self.add_rule(RuleSpec::ExternalSchema(sym), Some(id));
+                    Self::add_rule(&mut nodes, RuleSpec::ExternalSchema(sym), Some(id));
                 }
                 None => {}
             }
         }
-    }
-}
-
-impl Default for BnySchema {
-    fn default() -> Self {
-        Self::new()
+        BnySchema {
+            nodes,
+            id: intern.intern(schema_def.id().0),
+        }
     }
 }

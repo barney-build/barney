@@ -5,6 +5,8 @@
 
 use bny_syntax::StringId;
 
+use crate::registry::SchemaIndex;
+
 #[derive(Debug)]
 pub struct NodeSpec {
     // If we have an ID we're an explicit match
@@ -19,4 +21,5 @@ pub struct NodeSpec {
 pub enum RuleSpec {
     MatchNode(NodeSpec),
     ExternalSchema(StringId),
+    ExternalSchemaIndexed(SchemaIndex),
 }
