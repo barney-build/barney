@@ -15,6 +15,24 @@ pub struct BnySchema {
     id: StringId,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BnyRuleRef {
+    pub(super) id: NodeId,
+}
+
+impl BnyRuleRef {
+    pub fn children(&self, schema: &BnySchema) -> impl Iterator<Item = BnyRuleRef> {
+        self.id
+            .children(&schema.nodes)
+            .map(move |id| BnyRuleRef { id })
+    }
+
+    /// Return the actual rule
+    pub fn rule<'a>(&'a self, schema: &'a BnySchema) -> &'a RuleSpec {
+        schema.nodes[self.id].get()
+    }
+}
+
 // Export type of nodes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BnySchemaId(NodeId);
@@ -38,6 +56,11 @@ impl BnySchema {
     /// Interned ID
     pub fn id(&self) -> StringId {
         self.id
+    }
+
+    /// Return an iterator of nodes in the root level
+    pub fn rules(&self) -> impl Iterator<Item = BnyRuleRef> {
+        self.nodes.roots().map(|id| BnyRuleRef { id })
     }
 
     /// Build a BnySchema from a SchemaDef

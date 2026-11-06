@@ -9,7 +9,7 @@ use bny_syntax::{BnyInterner, BnyTree, StringId};
 use itertools::Itertools;
 use thiserror::Error;
 
-use crate::{BnySchema, SchemaRef, spec::RuleSpec};
+use crate::{BnySchema, SchemaRef, ValidatedDocument, spec::RuleSpec};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -24,7 +24,7 @@ pub enum RegistryError {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SchemaIndex(usize);
+pub struct SchemaIndex(pub(super) usize);
 
 #[derive(Debug)]
 pub struct SchemaRegistry<'a> {
@@ -35,14 +35,8 @@ pub struct SchemaRegistry<'a> {
 
 #[derive(Debug)]
 pub struct LinkedSchemaRegistry {
-    entry: SchemaIndex,
-    schemas: Vec<BnySchema>,
-}
-
-/// A validated document can be useful for accessing processed documents
-pub struct ValidatedDocument<'a, 'b> {
-    _tree: &'a BnyTree<'b>,
-    _intern: &'a BnyInterner,
+    pub(super) entry: SchemaIndex,
+    pub(super) schemas: Vec<BnySchema>,
 }
 
 impl<'a> SchemaRegistry<'a> {
@@ -103,15 +97,7 @@ impl<'a> SchemaRegistry<'a> {
 }
 
 impl LinkedSchemaRegistry {
-    // TODO: Actually validate =P
-    pub fn validate<'a, 'b>(
-        &'a self,
-        tree: &'a BnyTree<'b>,
-        intern: &'a BnyInterner,
-    ) -> ValidatedDocument<'a, 'b> {
-        ValidatedDocument {
-            _tree: tree,
-            _intern: intern,
-        }
+    pub fn validate<'a, 'b>(&'a self, tree: &'a BnyTree<'b>) -> ValidatedDocument<'a, 'b> {
+        ValidatedDocument::new(self, tree)
     }
 }

@@ -25,11 +25,14 @@ mod spec;
 pub use spec::NodeSpec;
 
 mod registry;
-pub use registry::{RegistryError, SchemaRegistry};
+pub use registry::{RegistryError, SchemaIndex, SchemaRegistry};
+
+mod validated;
+pub use validated::ValidatedDocument;
 
 #[cfg(test)]
 mod tests {
-    use bny_syntax::BnyInterner;
+    use bny_syntax::{BnyInterner, BnySpec};
 
     use crate::{BnySchema, SchemaRef, SchemaRegistry};
 
@@ -118,13 +121,9 @@ mod tests {
             test_script_schema::SCHEMA.id(),
             SchemaRef("barney.test.script.schema")
         );
-        eprintln!("Recipe structure: {:?}", test_recipe_schema::SCHEMA);
-        eprintln!("Script structure: {:?}", test_script_schema::SCHEMA);
 
         let mut intern = BnyInterner::default();
         let schema = BnySchema::compile(&mut intern, &test_recipe_schema::SCHEMA);
-        eprintln!("intern: {intern:?}");
-        eprintln!("schema defs: {schema:?}");
 
         let mut reg = SchemaRegistry::new(test_recipe_schema::ID);
         reg.install(schema)
@@ -132,6 +131,29 @@ mod tests {
         reg.install(BnySchema::compile(&mut intern, &test_script_schema::SCHEMA))
             .expect("Failed to install script schema");
         let linked = reg.link(&mut intern).expect("Failed to link schemas");
-        eprintln!("linked: {linked:?}");
+
+        let test_doc = r#"
+            (barney)version 1
+            meta {
+
+            }
+            build {
+                with {
+                    chickens
+                    bobsled
+                    with {
+
+                    }
+                }
+            }
+            not_schema_matched {
+
+            }
+            "#;
+        let spec = BnySpec::new(test_doc);
+        let tree = spec.process(&mut intern);
+
+        let valid = linked.validate(&tree);
+        eprintln!("validity: {valid:?}");
     }
 }
