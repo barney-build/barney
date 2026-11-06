@@ -10,6 +10,7 @@ use miette::{Diagnostic, SourceSpan};
 use crate::{BnyArgument, BnyInterner, BnyProperty, BnySpec, Error, StringId};
 
 /// Internal node storage within the BnyTree arena
+#[derive(Debug)]
 pub(super) struct BnyNode {
     pub(super) name: StringId,
     pub(super) tag: Option<StringId>,
@@ -43,6 +44,7 @@ impl<'a> BnyNode {
 ///
 /// A Tree structure is generated along with any diagnostics encountered
 /// in processing.
+#[derive(Debug)]
 pub struct BnyTree<'a> {
     pub(super) spec: &'a BnySpec,
     pub(super) arena: Arena<BnyNode>,
@@ -56,46 +58,45 @@ pub struct BnyTree<'a> {
 }
 
 /// Public contextual view of a node
-pub struct BnyNodeRef<'a> {
+#[derive(Debug, Clone, Copy)]
+pub struct BnyNodeRef {
     id: NodeId,
-    tree: &'a BnyTree<'a>,
     prop_id: Option<NodeId>,
     arg_id: Option<NodeId>,
 }
 
-impl<'a> BnyNodeRef<'a> {
+impl BnyNodeRef {
     /// Retrieve name by ref
-    pub fn name(&self) -> StringId {
-        self.tree.arena[self.id].get().name
+    pub fn name(&self, tree: &BnyTree) -> StringId {
+        tree.arena[self.id].get().name
     }
 
     /// Retrieve the node tag
-    pub fn tag(&self) -> Option<StringId> {
-        self.tree.arena[self.id].get().tag
+    pub fn tag(&self, tree: &BnyTree) -> Option<StringId> {
+        tree.arena[self.id].get().tag
     }
 
     /// Find all properties
-    pub fn properties(&self) -> impl Iterator<Item = &'a BnyProperty> {
+    pub fn properties<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = &'a BnyProperty> {
         self.prop_id
             .into_iter()
-            .flat_map(move |id| id.following_siblings(&self.tree.props))
-            .flat_map(move |id| self.tree.props.get_data(id))
+            .flat_map(move |id| id.following_siblings(&tree.props))
+            .flat_map(move |id| tree.props.get_data(id))
     }
 
     /// Get the arguments
-    pub fn arguments(&self) -> impl Iterator<Item = &'a BnyArgument> {
+    pub fn arguments<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = &'a BnyArgument> {
         self.arg_id
             .into_iter()
-            .flat_map(move |id| id.following_siblings(&self.tree.args))
-            .flat_map(move |id| self.tree.args.get_data(id))
+            .flat_map(move |id| id.following_siblings(&tree.args))
+            .flat_map(move |id| tree.args.get_data(id))
     }
 
     // Yield children of this node
-    pub fn children(&self) -> impl Iterator<Item = BnyNodeRef<'a>> {
-        self.id.children(&self.tree.arena).flat_map(move |id| {
-            self.tree.arena.get_data(id).map(move |n| BnyNodeRef {
+    pub fn children(&self, tree: &BnyTree) -> impl Iterator<Item = BnyNodeRef> {
+        self.id.children(&tree.arena).flat_map(move |id| {
+            tree.arena.get_data(id).map(move |n| BnyNodeRef {
                 id,
-                tree: self.tree,
                 prop_id: n.props,
                 arg_id: n.args,
             })
@@ -103,8 +104,8 @@ impl<'a> BnyNodeRef<'a> {
     }
 
     /// Returns node span
-    pub fn span(&self) -> SourceSpan {
-        self.tree.arena[self.id].get().span
+    pub fn span(&self, tree: BnyTree) -> SourceSpan {
+        tree.arena[self.id].get().span
     }
 }
 
@@ -128,12 +129,11 @@ impl<'a> BnyTree<'a> {
         self.span
     }
 
-    /// Iterate the built nodes
-    pub fn nodes(&'a self) -> impl Iterator<Item = BnyNodeRef<'a>> {
+    /// Iterate the root level nodes
+    pub fn nodes(&'a self) -> impl Iterator<Item = BnyNodeRef> {
         self.arena.roots().flat_map(|id| {
             self.arena.get_data(id).map(|a| BnyNodeRef {
                 id,
-                tree: self,
                 prop_id: a.props,
                 arg_id: a.args,
             })
@@ -169,9 +169,9 @@ mod tests {
 
         let nodes = res.nodes().collect_vec();
         let root = nodes.get(0).expect("no root of document");
-        let name = it.resolve(root.name());
+        let name = it.resolve(root.name(&res));
         assert_eq!(name, "document");
-        let props = root.properties().collect_vec();
+        let props = root.properties(&res).collect_vec();
         assert_eq!(props.len(), 1);
         let prop = props.get(0).unwrap();
         let prop_name = it.resolve(prop.name());
