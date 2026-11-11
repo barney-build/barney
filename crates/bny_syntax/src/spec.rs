@@ -6,11 +6,10 @@
 use std::vec;
 
 use indextree::{Arena, NodeId};
-use itertools::Itertools;
 use kdl::{KdlDocument, KdlNode};
 use miette::{SourceOffset, SourceSpan};
 
-use crate::{BnyArgument, BnyProperty, BnyTree, Error, interner::BnyInterner, tree::BnyNode};
+use crate::{BnyArgument, BnyProperty, BnyTree, interner::BnyInterner, tree::BnyNode};
 
 /// A BnySpec is used for parsing a `bny` file into
 /// a set of nodes. Largely this is identical to a `kdl` file
@@ -30,21 +29,20 @@ impl<'a> BnySpec {
     }
 
     fn process_node(
-        &self,
         arena: &mut Arena<BnyNode>,
         args: &mut Arena<BnyArgument>,
         props: &mut Arena<BnyProperty>,
-        raw: &KdlNode,
+        node: KdlNode,
         parent_id: Option<NodeId>,
         intern: &mut BnyInterner,
-    ) -> Vec<Error> {
+    ) -> NodeId {
         let mut args_id: Option<NodeId> = None;
         let mut args_id_first: Option<NodeId> = None;
 
         let mut props_id: Option<NodeId> = None;
         let mut props_id_first: Option<NodeId> = None;
 
-        for entry in raw.entries().iter().filter(|e| !e.is_empty()) {
+        for entry in node.entries().iter().filter(|e| !e.is_empty()) {
             match entry.name() {
                 // Property
                 Some(name) => {
@@ -82,18 +80,14 @@ impl<'a> BnySpec {
                 }
             }
         }
-        let node = BnyNode::from_kdl_node(raw, args_id_first, props_id_first, intern);
+        let node = BnyNode::from_kdl_node(&node, args_id_first, props_id_first, intern);
 
         // Append into the parent scope if provided or create a new node
-        let parent = if let Some(pid) = parent_id {
+        if let Some(pid) = parent_id {
             pid.append_value(node, arena)
         } else {
             arena.new_node(node)
-        };
-
-        raw.iter_children()
-            .flat_map(|n| self.process_node(arena, args, props, n, Some(parent), intern))
-            .collect_vec()
+        }
     }
 
     /// Return all processed nodes and any diagnostics from our
@@ -118,19 +112,27 @@ impl<'a> BnySpec {
             }
         };
 
-        let diagnostics = doc
-            .nodes()
-            .iter()
-            .flat_map(|n| self.process_node(&mut arena, &mut args, &mut props, n, None, intern))
-            .collect_vec();
+        let mut processing = Vec::new();
+        let span = doc.span();
+        processing.extend(doc.into_iter().rev().map(|n| (n, None)));
 
+        while let Some((mut node, parent)) = processing.pop() {
+            let children = node.children_mut().take();
+            let node_id =
+                Self::process_node(&mut arena, &mut args, &mut props, node, parent, intern);
+
+            // steal completely
+            if let Some(doc) = children {
+                processing.extend(doc.into_iter().rev().map(|c| (c, Some(node_id))));
+            }
+        }
         BnyTree {
             spec: self,
-            span: doc.span(),
+            span,
             arena,
             args,
             props,
-            diagnostics,
+            diagnostics: vec![],
         }
     }
 }
