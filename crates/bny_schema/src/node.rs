@@ -27,13 +27,14 @@ pub const fn node_def<'a, T: SchemaKey<'a>>(identity: T) -> NodeDef<'a, T> {
 
 impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
     /// Erase type into NodeSpec for compilation
-    pub(crate) fn spec(&self, intern: &mut BnyInterner) -> NodeSpec {
+    pub(crate) fn spec(&self, intern: &mut BnyInterner, index: usize) -> NodeSpec {
         NodeSpec {
             id: match self.identity().name() {
                 SchemaName::Explicit(name) => Some(intern.intern(name)),
                 SchemaName::Dynamic => None,
             },
-            symbolic: Some(self.identity().symbolic_id()),
+            symbolic: self.identity().symbolic_id(),
+            local_index: index,
         }
     }
     /// Return the runtime identity

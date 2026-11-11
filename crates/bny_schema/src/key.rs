@@ -6,10 +6,12 @@
 //! Provide a runtime mechanism for matching a symbolic identifier
 //! with the actual string representation in `bny_syntax`
 
+use std::fmt;
+
 /// Key lookup trait for runtime analysis
-pub trait SchemaKey<'a>: Copy {
+pub trait SchemaKey<'a>: Copy + fmt::Debug {
     /// Return the symbolic identity (author bound)
-    fn symbolic_id(self) -> u16;
+    fn symbolic_id(self) -> u8;
 
     /// Return a name matching mechanism
     fn name(&self) -> SchemaName<'a>;

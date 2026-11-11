@@ -97,7 +97,16 @@ impl<'a> SchemaRegistry<'a> {
 }
 
 impl LinkedSchemaRegistry {
-    pub fn validate<'a, 'b>(&'a self, tree: &'a BnyTree<'b>) -> ValidatedDocument<'a, 'b> {
-        ValidatedDocument::new(self, tree)
+    pub fn validate<'a, 'b>(
+        &'a self,
+        tree: &'a BnyTree<'b>,
+        intern: &'a BnyInterner,
+    ) -> ValidatedDocument<'a, 'b> {
+        ValidatedDocument::new(self, tree, intern)
+    }
+
+    /// Return the entry schema
+    pub fn entry(&self) -> &BnySchema {
+        &self.schemas[self.entry.0]
     }
 }

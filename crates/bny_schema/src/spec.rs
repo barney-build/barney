@@ -13,7 +13,10 @@ pub struct NodeSpec {
     pub(crate) id: Option<StringId>,
 
     // Symbolic match value
-    pub(crate) symbolic: Option<u16>,
+    pub(crate) symbolic: u8,
+
+    // Index within parent context
+    pub(crate) local_index: usize,
 }
 
 /// Encapsulates node rules into singular rule

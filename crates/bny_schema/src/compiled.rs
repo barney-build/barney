@@ -3,21 +3,49 @@
 
 //! Compiled barney schema
 
+use std::num::TryFromIntError;
+
 use bny_syntax::{BnyInterner, StringId};
 use indextree::{Arena, NodeId};
+use thiserror::Error;
 
 use crate::{Rule, SchemaDef, SchemaKey, spec::RuleSpec};
+
+const MAX_RULES: usize = (u8::MAX as usize) + 1;
+
+#[derive(Debug, Error)]
+pub enum SchemaError {
+    #[error("duplicate symbolic binding: {symbolic}")]
+    DuplicateSymbolic { symbolic: u8 },
+
+    #[error(transparent)]
+    IndexOverflow(#[from] TryFromIntError),
+}
 
 /// A compiled bny schema representation
 #[derive(Debug)]
 pub struct BnySchema {
     pub(super) nodes: Arena<RuleSpec>,
     id: StringId,
+
+    // tiny table for easy rules
+    map: [Option<BindingReference>; MAX_RULES],
+
+    pub(crate) n_rules: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct BnyRuleRef {
     pub(super) id: NodeId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BindingReference {
+    // The parent rule
+    pub(crate) parent: Option<BnyRuleRef>,
+
+    // Offset within the rule
+    pub(crate) local_offset: u8,
 }
 
 impl BnyRuleRef {
@@ -68,20 +96,40 @@ impl BnySchema {
     pub fn compile<'a, T: SchemaKey<'a>>(
         intern: &mut BnyInterner,
         schema_def: &'a SchemaDef<'a, T>,
-    ) -> BnySchema {
+    ) -> Result<BnySchema, SchemaError> {
         let mut nodes = Arena::new();
+        let mut table: [Option<BindingReference>; MAX_RULES] = [None; 256];
 
         let mut processing = Vec::new();
-        let batch = schema_def.nodes().iter().rev().map(|n| (n, None));
-        processing.extend(batch);
-        while let Some((node, parent)) = processing.pop() {
-            let spec = node.spec(intern);
+        let mut n_rules = 0;
+        processing.extend(
+            schema_def
+                .nodes()
+                .iter()
+                .map(|n| (n, None))
+                .enumerate()
+                .rev(),
+        );
+        while let Some((index, (node, parent))) = processing.pop() {
+            let spec = node.spec(intern, index);
+            let symbolic = spec.symbolic;
+            let symbolic_idx = symbolic as usize;
             let rule = RuleSpec::MatchNode(spec);
             let id = Self::add_rule(&mut nodes, rule, parent);
+            n_rules += 1;
+
+            // Symbolic mapping.
+            table[symbolic_idx] = match table[symbolic_idx] {
+                Some(_) => return Err(SchemaError::DuplicateSymbolic { symbolic }),
+                None => Some(BindingReference {
+                    parent: parent.as_ref().map(|p| BnyRuleRef { id: p.0 }),
+                    local_offset: u8::try_from(index)?,
+                }),
+            };
 
             match node.child() {
                 Some(Rule::Nodes(nodes)) => {
-                    processing.extend(nodes.iter().rev().map(move |n| (n, Some(id))))
+                    processing.extend(nodes.iter().map(move |n| (n, Some(id))).enumerate().rev());
                 }
                 Some(Rule::External(schema_ref)) => {
                     let sym = intern.intern(schema_ref.0);
@@ -90,9 +138,15 @@ impl BnySchema {
                 None => {}
             }
         }
-        BnySchema {
+        Ok(BnySchema {
             nodes,
             id: intern.intern(schema_def.id().0),
-        }
+            map: table,
+            n_rules,
+        })
+    }
+
+    pub(crate) fn resolve_symbolic(&self, symbol: u8) -> Option<BindingReference> {
+        self.map[symbol as usize]
     }
 }
