@@ -23,6 +23,7 @@ impl ChildSlotStorage {
     }
 
     pub fn reserve(&mut self, many: usize) {
+        // inclusive range but need length
         self.0.resize_with(many + self.len() + 1, Default::default);
     }
 

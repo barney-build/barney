@@ -30,8 +30,6 @@ pub struct BnySchema {
 
     // tiny table for easy rules
     map: [Option<BindingReference>; MAX_RULES],
-
-    pub(crate) n_rules: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -101,7 +99,6 @@ impl BnySchema {
         let mut table: [Option<BindingReference>; MAX_RULES] = [None; 256];
 
         let mut processing = Vec::new();
-        let mut n_rules = 0;
         processing.extend(
             schema_def
                 .nodes()
@@ -116,7 +113,6 @@ impl BnySchema {
             let symbolic_idx = symbolic as usize;
             let rule = RuleSpec::MatchNode(spec);
             let id = Self::add_rule(&mut nodes, rule, parent);
-            n_rules += 1;
 
             // Symbolic mapping.
             table[symbolic_idx] = match table[symbolic_idx] {
@@ -142,7 +138,6 @@ impl BnySchema {
             nodes,
             id: intern.intern(schema_def.id().0),
             map: table,
-            n_rules,
         })
     }
 

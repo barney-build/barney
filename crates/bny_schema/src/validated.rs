@@ -87,6 +87,15 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         ValidationResult::Unmatched
     }
 
+    fn count_slot_storage(schema: &'a BnySchema, rules: impl Iterator<Item = BnyRuleRef>) -> usize {
+        rules
+            .filter_map(|r| match r.rule(schema) {
+                RuleSpec::MatchNode(_) => Some(()),
+                _ => None,
+            })
+            .count()
+    }
+
     /// Return a document view with all validation performed
     /// TODO: Also store all diagnostics along the way and validate bounds/occurence
     pub(super) fn new(
@@ -106,7 +115,8 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         }));
 
         // Total storage - the root rules
-        let n_roots = registry.entry().n_rules;
+        let n_roots = Self::count_slot_storage(registry.entry(), registry.entry().rules());
+
         let root_slots: Range<usize> = Range {
             start: 0,
             end: n_roots,
@@ -125,7 +135,7 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                 // explicit match, descend into this node
                 ValidationResult::Matched { rule, index } => {
                     // Reserve range for children rules
-                    let our_child_count = rule.children(schema).count();
+                    let our_child_count = Self::count_slot_storage(schema, rule.children(schema));
                     let child_range: Range<usize> = Range {
                         start: slots.len(),
                         end: slots.len() + our_child_count,
@@ -166,12 +176,14 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                     }));
                 }
                 // change context for processing children
-                ValidationResult::ChangeContext(schema_index) => work_queue.push(ValidationFrame {
-                    node: frame.node,
-                    schema_id: schema_index,
-                    rule_base: None,
-                    arena_base: frame.arena_base,
-                }),
+                ValidationResult::ChangeContext(schema_index) => {
+                    work_queue.extend(frame.node.children(tree).map(move |n| ValidationFrame {
+                        node: n,
+                        schema_id: schema_index,
+                        rule_base: None,
+                        arena_base: frame.arena_base,
+                    }))
+                }
                 // no rules matched, don't bother descending
                 ValidationResult::Unmatched => {}
             }
