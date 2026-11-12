@@ -3,11 +3,13 @@
 
 //! Schema validated document view
 
+mod slots;
+
 use std::{iter, range::Range};
 
 use crate::{
     BnySchema, SchemaIndex, SchemaKey, compiled::BnyRuleRef, registry::LinkedSchemaRegistry,
-    spec::RuleSpec,
+    spec::RuleSpec, validated::slots::ChildSlotStorage,
 };
 use bny_syntax::{BnyInterner, BnyNodeRef, BnyTree};
 use indextree::{Arena, NodeId};
@@ -34,37 +36,6 @@ struct Match {
     node: BnyNodeRef,
     next: Option<MatchId>,
     schema: SchemaIndex,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-struct ChildSlot {
-    first: Option<MatchId>,
-    last: Option<MatchId>,
-}
-
-#[derive(Debug, Default)]
-struct ChildSlotStorage(pub Vec<ChildSlot>);
-
-impl ChildSlotStorage {
-    pub fn new(size: usize) -> Self {
-        let mut s = Vec::with_capacity(size);
-        s.resize_with(size, Default::default);
-        ChildSlotStorage(s)
-    }
-
-    pub fn reserve(&mut self, many: usize) {
-        self.0.resize_with(many + self.len() + 1, Default::default);
-    }
-
-    // size
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    // Safely get by index
-    pub fn get(&self, idx: usize) -> Option<&ChildSlot> {
-        self.0.get(idx)
-    }
 }
 
 /// Validated document is a read only view of the
@@ -179,7 +150,7 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                     };
 
                     let slot_index = slot_range.start + index;
-                    let head = &mut slots.0[slot_index];
+                    let head = slots.get_mut(slot_index);
                     if let Some(last) = head.last {
                         arena[last.0].get_mut().next = Some(MatchId(parent_node));
                     } else {
