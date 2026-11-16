@@ -3,14 +3,13 @@
 
 //! Schema validated document view
 
-mod slots;
-
-use std::{iter, range::Range};
+use std::collections::VecDeque;
 
 use crate::{
     BnySchema, SchemaIndex, SchemaKey, compiled::BnyRuleRef, registry::LinkedSchemaRegistry,
-    spec::RuleSpec, validated::slots::ChildSlotStorage,
+    spec::RuleSpec,
 };
+use bny_slots::{Block, LinkedSlotStorage};
 use bny_syntax::{BnyInterner, BnyNodeRef, BnyTree};
 use indextree::{Arena, NodeId};
 use thiserror::Error;
@@ -32,9 +31,8 @@ struct MatchId(pub NodeId);
 
 #[derive(Debug)]
 struct Match {
-    children: Range<usize>,
+    child_block: Block,
     node: BnyNodeRef,
-    next: Option<MatchId>,
     schema: SchemaIndex,
 }
 
@@ -45,9 +43,9 @@ pub struct ValidatedDocument<'a, 'b> {
     registry: &'a LinkedSchemaRegistry,
     tree: &'a BnyTree<'b>,
 
-    slots: ChildSlotStorage,
+    slots: LinkedSlotStorage<MatchId>,
     arena: Arena<Match>,
-    root_slots: Range<usize>,
+    root_slots: Block,
     intern: &'a BnyInterner,
 }
 
@@ -87,13 +85,43 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         ValidationResult::Unmatched
     }
 
+    /// Chaining children slots
     fn count_slot_storage(schema: &'a BnySchema, rules: impl Iterator<Item = BnyRuleRef>) -> usize {
         rules
             .filter_map(|r| match r.rule(schema) {
-                RuleSpec::MatchNode(_) => Some(()),
+                RuleSpec::MatchNode(node_spec) => Some(node_spec.local_index + 1),
                 _ => None,
             })
-            .count()
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn child_context(
+        registry: &'a LinkedSchemaRegistry,
+        schema_id: SchemaIndex,
+        schema: &'a BnySchema,
+        rules: impl Iterator<Item = BnyRuleRef>,
+    ) -> (SchemaIndex, usize) {
+        let mut count = 0;
+
+        for rule in rules {
+            match rule.rule(schema) {
+                RuleSpec::MatchNode(node_spec) => {
+                    count = count.max(node_spec.local_index + 1);
+                }
+                RuleSpec::ExternalSchemaIndexed(index) => {
+                    let child_schema = &registry.schemas[index.0];
+
+                    return (
+                        *index,
+                        Self::count_slot_storage(child_schema, child_schema.rules()),
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        (schema_id, count)
     }
 
     /// Return a document view with all validation performed
@@ -104,7 +132,7 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         intern: &'a BnyInterner,
     ) -> Self {
         // Initial queue of root level rules + nodes
-        let mut work_queue: Vec<ValidationFrame> = Vec::new();
+        let mut work_queue: VecDeque<ValidationFrame> = VecDeque::new();
         let mut arena: Arena<Match> = Arena::new();
 
         work_queue.extend(tree.nodes().map(|n| ValidationFrame {
@@ -117,13 +145,10 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         // Total storage - the root rules
         let n_roots = Self::count_slot_storage(registry.entry(), registry.entry().rules());
 
-        let root_slots: Range<usize> = Range {
-            start: 0,
-            end: n_roots,
-        };
-        let mut slots = ChildSlotStorage::new(n_roots);
+        let mut slots = LinkedSlotStorage::new();
+        let root_slots = slots.allocate(n_roots);
 
-        while let Some(frame) = work_queue.pop() {
+        while let Some(frame) = work_queue.pop_front() {
             let schema = &registry.schemas[frame.schema_id.0];
             let result = if let Some(rule_base) = &frame.rule_base {
                 Self::process_rules(rule_base.children(schema), schema, tree, frame)
@@ -135,38 +160,38 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                 // explicit match, descend into this node
                 ValidationResult::Matched { rule, index } => {
                     // Reserve range for children rules
-                    let our_child_count = Self::count_slot_storage(schema, rule.children(schema));
-                    let child_range: Range<usize> = Range {
-                        start: slots.len(),
-                        end: slots.len() + our_child_count,
+                    let (child_schema, our_child_count) = Self::child_context(
+                        registry,
+                        frame.schema_id,
+                        schema,
+                        rule.children(schema),
+                    );
+
+                    let slot_range = if let Some(parent) = frame.arena_base {
+                        arena[parent.0].get().child_block
+                    } else {
+                        root_slots
                     };
-                    slots.reserve(our_child_count);
+
+                    let child_block = slots.allocate(our_child_count);
 
                     let matched_node = Match {
-                        children: child_range,
+                        child_block,
                         node: frame.node,
-                        next: None,
-                        schema: frame.schema_id,
+                        schema: child_schema,
                     };
 
                     // Virtual root nodes or nested?
-                    let (slot_range, parent_node) = if let Some(parent) = frame.arena_base {
-                        (
-                            arena[parent.0].get().children,
-                            parent.0.append_value(matched_node, &mut arena),
-                        )
+                    let parent_node = if let Some(parent) = frame.arena_base {
+                        parent.0.append_value(matched_node, &mut arena)
                     } else {
-                        (root_slots, arena.new_node(matched_node))
+                        arena.new_node(matched_node)
                     };
 
-                    let slot_index = slot_range.start + index;
-                    let head = slots.get_mut(slot_index);
-                    if let Some(last) = head.last {
-                        arena[last.0].get_mut().next = Some(MatchId(parent_node));
-                    } else {
-                        head.first = Some(MatchId(parent_node));
-                    };
-                    head.last = Some(MatchId(parent_node));
+                    // Do not push empty blocks!
+                    if !slot_range.is_empty() {
+                        slots.push(slot_range, index, MatchId(parent_node));
+                    }
 
                     work_queue.extend(frame.node.children(tree).map(move |n| ValidationFrame {
                         node: n,
@@ -177,12 +202,12 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                 }
                 // change context for processing children
                 ValidationResult::ChangeContext(schema_index) => {
-                    work_queue.extend(frame.node.children(tree).map(move |n| ValidationFrame {
-                        node: n,
+                    work_queue.push_back(ValidationFrame {
+                        node: frame.node,
                         schema_id: schema_index,
                         rule_base: None,
                         arena_base: frame.arena_base,
-                    }))
+                    })
                 }
                 // no rules matched, don't bother descending
                 ValidationResult::Unmatched => {}
@@ -212,8 +237,8 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
             })?;
 
         // Can't grab nodes from root if it has a parent in this accessor..
-        let rule_offset = match parent {
-            Some(p) => self.arena[p.0].get().children,
+        let head_block = match parent {
+            Some(p) => self.arena[p.0].get().child_block,
             None => self.root_slots,
         };
 
@@ -224,16 +249,13 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
             });
         }
 
-        let itere = self
+        let result = self
             .slots
-            .get(rule_offset.start + lookup.local_offset as usize)
-            .and_then(|l| l.first);
-
-        let result =
-            iter::successors(itere, |f| self.arena[f.0].get().next).map(|n| ValidatedNode {
-                matched: n,
+            .iter(head_block, lookup.local_offset as usize)
+            .map(|m| ValidatedNode {
+                matched: *m,
                 doc: self,
-                schema: self.arena[n.0].get().schema,
+                schema: self.arena[m.0].get().schema,
             });
 
         Ok(result)

@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.96"
 
 [dependencies]
+bny_slots = {path = "../bny_slots" }
 bny_syntax = { path = "../bny_syntax" }
 indextree.workspace = true
 itertools.workspace = true

@@ -157,6 +157,13 @@ mod tests {
                     }
                 }
             }
+            build {
+                second
+            }
+            build {
+                third
+                should-not-be-first
+            }
             not_schema_matched {
 
             }
@@ -165,12 +172,11 @@ mod tests {
         let tree = spec.process(&mut intern);
 
         let valid = linked.validate(&tree, &intern);
-        eprintln!("validity: {valid:?}");
         let build = valid
             .nodes(RecipeKeys::Build)
             .expect("should have build nodes")
             .collect_vec();
-        assert_eq!(build.len(), 1);
+        assert_eq!(build.len(), 3);
 
         let links = valid.nodes(RecipeKeys::LinksNode);
         assert!(links.is_err());
@@ -182,10 +188,10 @@ mod tests {
             .expect("Should have WITH nodes")
             .collect_vec();
 
+        assert_eq!(build_with.len(), 1);
+
         // shouldnt be able to grab schema elsewhere (bucketing)
         let build_with_wrong_schema = valid.nodes(RecipeKeys::LinksNodeBugs);
         assert!(build_with_wrong_schema.is_err());
-
-        eprintln!("debug: {build_with:?}");
     }
 }
