@@ -4,7 +4,7 @@ resolver = "3"
 members = [
     "crates/bny_syntax",
     "crates/bny_schema",
-    "barney",
+    "barney", "crates/bny_slots",
 ]
 
 [workspace.dependencies]
