@@ -1,0 +1,8 @@
+[package]
+name = "bny_recipe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bny_schema = { path = "../bny_schema" }
+bny_syntax = { path = "../bny_syntax" }
