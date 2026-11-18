@@ -7,7 +7,7 @@ use indextree::{Arena, NodeId};
 use kdl::KdlNode;
 use miette::{Diagnostic, SourceSpan};
 
-use crate::{BnyArgument, BnyInterner, BnyProperty, BnySpec, Error, StringId};
+use crate::{BnyArgument, BnyInterner, BnyProperty, BnySpec, Error, ProcessedValue, StringId};
 
 /// Internal node storage within the BnyTree arena
 #[derive(Debug)]
@@ -65,6 +65,33 @@ pub struct BnyNodeRef {
     arg_id: Option<NodeId>,
 }
 
+/// Public view of an argument
+#[derive(Debug, Clone, Copy)]
+pub struct BnyArgumentRef {
+    id: NodeId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BnyPropertyRef {
+    id: NodeId,
+}
+
+impl BnyPropertyRef {
+    pub fn name<'a>(&'a self, tree: &'a BnyTree) -> StringId {
+        tree.props[self.id].get().name
+    }
+
+    pub fn value<'a>(&self, tree: &'a BnyTree) -> &'a ProcessedValue {
+        &tree.props[self.id].get().value
+    }
+}
+
+impl BnyArgumentRef {
+    pub fn value<'a>(&'a self, tree: &'a BnyTree) -> &'a ProcessedValue {
+        tree.args[self.id].get().value()
+    }
+}
+
 impl BnyNodeRef {
     /// Retrieve name by ref
     pub fn name(&self, tree: &BnyTree) -> StringId {
@@ -77,19 +104,19 @@ impl BnyNodeRef {
     }
 
     /// Find all properties
-    pub fn properties<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = &'a BnyProperty> {
+    pub fn properties<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = BnyPropertyRef> {
         self.prop_id
             .into_iter()
             .flat_map(move |id| id.following_siblings(&tree.props))
-            .flat_map(move |id| tree.props.get_data(id))
+            .map(|id| BnyPropertyRef { id })
     }
 
     /// Get the arguments
-    pub fn arguments<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = &'a BnyArgument> {
+    pub fn arguments<'a>(&self, tree: &'a BnyTree<'a>) -> impl Iterator<Item = BnyArgumentRef> {
         self.arg_id
             .into_iter()
             .flat_map(move |id| id.following_siblings(&tree.args))
-            .flat_map(move |id| tree.args.get_data(id))
+            .map(|id| BnyArgumentRef { id })
     }
 
     // Yield children of this node
@@ -174,9 +201,12 @@ mod tests {
         let props = root.properties(&res).collect_vec();
         assert_eq!(props.len(), 1);
         let prop = props.get(0).unwrap();
-        let prop_name = it.resolve(prop.name());
+        let prop_name = it.resolve(prop.name(&res));
         assert_eq!(prop_name, "schema");
-        let prop_value = prop.value().as_string().expect("Should contain a string!");
+        let prop_value = prop
+            .value(&res)
+            .as_string()
+            .expect("Should contain a string!");
         assert_eq!(prop_value, "is it though");
     }
 }

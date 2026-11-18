@@ -17,7 +17,7 @@ pub use spec::BnySpec;
 
 mod tree;
 use thiserror::Error;
-pub use tree::{BnyNodeRef, BnyTree};
+pub use tree::{BnyArgumentRef, BnyNodeRef, BnyPropertyRef, BnyTree};
 mod value;
 pub use value::ProcessedValue;
 
