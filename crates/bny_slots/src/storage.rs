@@ -3,7 +3,10 @@
 
 //! Simple Vec<> storage
 
-use std::{fmt::Debug, range::Range};
+use std::{
+    fmt::Debug,
+    range::{Range, RangeIter},
+};
 
 /// Simplistic slot allocation storage
 #[derive(Debug, Default)]
@@ -27,6 +30,16 @@ impl Block {
     /// Returns true if empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+impl IntoIterator for &Block {
+    type Item = usize;
+
+    type IntoIter = RangeIter<usize>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 
