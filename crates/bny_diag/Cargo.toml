@@ -1,0 +1,10 @@
+[package]
+name = "bny_diag"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bny_slots = { path = "../bny_slots" }
+miette.workspace = true
+thiserror.workspace = true
+lasso = { workspace = true, features = ["inline-more"] }
