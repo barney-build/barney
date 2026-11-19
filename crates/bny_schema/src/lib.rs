@@ -21,14 +21,20 @@ pub use node::{NodeDef, node_def};
 mod rule;
 pub use rule::Rule;
 
+mod property;
+pub use property::PropertyDef;
+
 mod spec;
-pub use spec::NodeSpec;
+pub use spec::{NodeSpec, PropertySpec};
 
 mod registry;
 pub use registry::{RegistryError, SchemaIndex, SchemaRegistry};
 
 mod validated;
 pub use validated::ValidatedDocument;
+
+mod value;
+pub use value::{AsBnyValueType, BnyValueType, ValueError};
 
 #[cfg(test)]
 mod tests {
@@ -42,7 +48,8 @@ mod tests {
 
     mod test_recipe_schema {
         use crate::{
-            Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def, tests::test_script_schema,
+            PropertyDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def,
+            tests::test_script_schema,
         };
 
         // top level nodes
@@ -50,7 +57,7 @@ mod tests {
         #[repr(u8)]
         pub enum RecipeKeys {
             MetaNode,
-            // MetaNodeName,
+            MetaId,
             Build,
             LinksNode,
             LinksNodeBugs,
@@ -64,7 +71,7 @@ mod tests {
             fn name(&self) -> SchemaName<'a> {
                 match self {
                     RecipeKeys::MetaNode => SchemaName::Explicit("meta"),
-                    // RecipeKeys::MetaNodeName => SchemaName::Explicit("name"),
+                    RecipeKeys::MetaId => SchemaName::Explicit("id"),
                     RecipeKeys::Build => SchemaName::Explicit("build"),
                     RecipeKeys::LinksNode => SchemaName::Explicit("links"),
                     RecipeKeys::LinksNodeBugs => SchemaName::Explicit("bugs"),
@@ -75,6 +82,7 @@ mod tests {
         pub static ID: SchemaRef = SchemaRef("barney.test.pkg.schema");
         pub static SCHEMA: SchemaDef<RecipeKeys> = SchemaDef::new(ID).children(&[
             &node_def(RecipeKeys::MetaNode)
+                .properties(&[PropertyDef::new::<&str>(RecipeKeys::MetaId)])
                 .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNode)
                     .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNodeBugs)]))])),
             &node_def(RecipeKeys::Build).children(Rule::External(test_script_schema::ID)),
@@ -142,12 +150,9 @@ mod tests {
 
         let test_doc = r#"
             (barney)version 1
-            meta {
-
+            meta id="beep bop" {
             }
-            meta {
-                lol
-            }
+            meta id="i am fine :D"
             build {
                 with {
                     chickens
@@ -177,6 +182,26 @@ mod tests {
             .expect("should have build nodes")
             .collect_vec();
         assert_eq!(build.len(), 3);
+
+        let meta = valid
+            .nodes(RecipeKeys::MetaNode)
+            .expect("should have one meta")
+            .collect_vec();
+        assert_eq!(meta.len(), 2);
+
+        assert_eq!(
+            &meta[0]
+                .property::<&str>(RecipeKeys::MetaId)
+                .expect("missing id in [0]"),
+            &"beep bop"
+        );
+
+        assert_eq!(
+            &meta[1]
+                .property::<&str>(RecipeKeys::MetaId)
+                .expect("missing id in [1]"),
+            &"i am fine :D"
+        );
 
         let links = valid.nodes(RecipeKeys::LinksNode);
         assert!(links.is_err());

@@ -5,11 +5,12 @@
 
 use std::num::TryFromIntError;
 
+use bny_slots::{Block, SlotStorage};
 use bny_syntax::{BnyInterner, StringId};
 use indextree::{Arena, NodeId};
 use thiserror::Error;
 
-use crate::{Rule, SchemaDef, SchemaKey, spec::RuleSpec};
+use crate::{NodeDef, NodeSpec, PropertySpec, Rule, SchemaDef, SchemaKey, spec::RuleSpec};
 
 const MAX_RULES: usize = (u8::MAX as usize) + 1;
 
@@ -29,21 +30,56 @@ pub struct BnySchema {
     id: StringId,
 
     // tiny table for easy rules
-    map: [Option<BindingReference>; MAX_RULES],
+    table: BindingTable,
+    pub(super) props: SlotStorage<PropertySpec>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct BnyRuleRef {
-    pub(super) id: NodeId,
+    pub(crate) id: NodeId,
+}
+
+/// Tiny table for binding symbolic references
+#[derive(Debug)]
+pub(crate) struct BindingTable {
+    table: [Option<BindingReference>; MAX_RULES],
+}
+
+impl BindingTable {
+    /// Return a new binding table
+    fn new() -> Self {
+        Self {
+            table: [None; MAX_RULES],
+        }
+    }
+
+    /// Insert a binding into the table
+    fn insert_binding(
+        &mut self,
+        symbolic: u8,
+        binding: BindingReference,
+    ) -> Result<(), SchemaError> {
+        let symbolic_idx = symbolic as usize;
+        match self.table[symbolic_idx] {
+            Some(_) => Err(SchemaError::DuplicateSymbolic { symbolic }),
+            None => {
+                self.table[symbolic_idx] = Some(binding);
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct BindingReference {
-    // The parent rule
-    pub(crate) parent: Option<BnyRuleRef>,
-
-    // Offset within the rule
-    pub(crate) local_offset: u8,
+pub(crate) enum BindingReference {
+    Node {
+        parent: Option<BnyRuleRef>,
+        local_offset: u8,
+    },
+    Property {
+        id: BnySchemaId,
+        local_offset: u8,
+    },
 }
 
 impl BnyRuleRef {
@@ -57,6 +93,18 @@ impl BnyRuleRef {
     pub fn rule<'a>(&'a self, schema: &'a BnySchema) -> &'a RuleSpec {
         schema.nodes[self.id].get()
     }
+
+    /// Return the propertys permitted for a nodespec in the given rule & schema
+    pub fn properties<'a>(
+        &self,
+        schema: &'a BnySchema,
+        spec: &NodeSpec,
+    ) -> impl Iterator<Item = &'a PropertySpec> {
+        spec.properties
+            .iter()
+            .flatten()
+            .map(|idx| schema.props.get(idx))
+    }
 }
 
 // Export type of nodes
@@ -64,6 +112,29 @@ impl BnyRuleRef {
 pub struct BnySchemaId(NodeId);
 
 impl BnySchema {
+    /// Build the initial block of properties for a node definition
+    fn build_properties<'a, T: SchemaKey<'a>>(
+        property_rules: &mut SlotStorage<PropertySpec>,
+        intern: &mut BnyInterner,
+        node: &'a NodeDef<'a, T>,
+    ) -> Option<Block> {
+        match node.props() {
+            // Explicit property rules
+            Some(props) => {
+                let property_block = property_rules.allocate(props.len(), Default::default);
+                for (prop_idx, prop) in props.iter().enumerate() {
+                    property_rules.set(
+                        property_block.0.start + prop_idx,
+                        prop.spec(intern, prop_idx),
+                    );
+                }
+                Some(property_block)
+            }
+            // None supported
+            None => None,
+        }
+    }
+
     /// Add a rule node into the tree
     /// TODO: NodeSpec needs to include all PropertySpec/ArgSpec
     fn add_rule(
@@ -96,7 +167,7 @@ impl BnySchema {
         schema_def: &'a SchemaDef<'a, T>,
     ) -> Result<BnySchema, SchemaError> {
         let mut nodes = Arena::new();
-        let mut table: [Option<BindingReference>; MAX_RULES] = [None; 256];
+        let mut table = BindingTable::new();
 
         let mut processing = Vec::new();
         processing.extend(
@@ -107,21 +178,31 @@ impl BnySchema {
                 .enumerate()
                 .rev(),
         );
+        let mut property_rules: SlotStorage<PropertySpec> = SlotStorage::new();
+
         while let Some((index, (node, parent))) = processing.pop() {
-            let spec = node.spec(intern, index);
+            let property_area = Self::build_properties(&mut property_rules, intern, node);
+            let spec = node.spec(intern, index, property_area);
             let symbolic = spec.symbolic;
-            let symbolic_idx = symbolic as usize;
             let rule = RuleSpec::MatchNode(spec);
             let id = Self::add_rule(&mut nodes, rule, parent);
 
-            // Symbolic mapping.
-            table[symbolic_idx] = match table[symbolic_idx] {
-                Some(_) => return Err(SchemaError::DuplicateSymbolic { symbolic }),
-                None => Some(BindingReference {
-                    parent: parent.as_ref().map(|p| BnyRuleRef { id: p.0 }),
-                    local_offset: u8::try_from(index)?,
-                }),
+            // Bind the node
+            let binding = BindingReference::Node {
+                parent: parent.as_ref().map(|p| BnyRuleRef { id: p.0 }),
+                local_offset: u8::try_from(index)?,
             };
+            table.insert_binding(symbolic, binding)?;
+
+            // Bind the properties
+            for (local_offset, prop_idx) in property_area.iter().flatten().enumerate() {
+                let prop = property_rules.get(prop_idx);
+                let binding = BindingReference::Property {
+                    id,
+                    local_offset: u8::try_from(local_offset)?,
+                };
+                table.insert_binding(prop.symbolic, binding)?;
+            }
 
             match node.child() {
                 Some(Rule::Nodes(nodes)) => {
@@ -137,11 +218,13 @@ impl BnySchema {
         Ok(BnySchema {
             nodes,
             id: intern.intern(schema_def.id().0),
-            map: table,
+            table,
+            props: property_rules,
         })
     }
 
+    /// Resolve symbolic to the binding reference
     pub(crate) fn resolve_symbolic(&self, symbol: u8) -> Option<BindingReference> {
-        self.map[symbol as usize]
+        self.table.table[symbol as usize]
     }
 }
