@@ -6,6 +6,7 @@
 use std::{
     fmt::Debug,
     range::{Range, RangeIter},
+    slice::Iter,
 };
 
 /// Simplistic slot allocation storage
@@ -81,6 +82,11 @@ where
     pub fn get_mut(&mut self, index: usize) -> &mut T {
         debug_assert!(index < self.data.len());
         &mut self.data[index]
+    }
+
+    /// Iterate the items
+    pub fn iter<'a>(&'a self) -> Iter<'a, T> {
+        self.data.iter()
     }
 }
 
