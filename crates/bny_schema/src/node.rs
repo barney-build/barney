@@ -6,15 +6,17 @@
 //! Define a node matching mechanism, along with corresponding
 //! match rules.
 
+use bny_slots::Block;
 use bny_syntax::BnyInterner;
 
-use crate::{NodeSpec, Rule, SchemaKey, SchemaName};
+use crate::{NodeSpec, PropertyDef, Rule, SchemaKey, SchemaName};
 
 /// Node schema
 #[derive(Debug)]
 pub struct NodeDef<'a, T: SchemaKey<'a>> {
     identity: T,
     children: Option<Rule<'a, T>>,
+    properties: Option<&'a [PropertyDef<'a, T>]>,
 }
 
 /// Construct a new node definition
@@ -22,12 +24,18 @@ pub const fn node_def<'a, T: SchemaKey<'a>>(identity: T) -> NodeDef<'a, T> {
     NodeDef {
         identity,
         children: None,
+        properties: None,
     }
 }
 
 impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
     /// Erase type into NodeSpec for compilation
-    pub(crate) fn spec(&self, intern: &mut BnyInterner, index: usize) -> NodeSpec {
+    pub(crate) fn spec(
+        &self,
+        intern: &mut BnyInterner,
+        index: usize,
+        properties: Option<Block>,
+    ) -> NodeSpec {
         NodeSpec {
             id: match self.identity().name() {
                 SchemaName::Explicit(name) => Some(intern.intern(name)),
@@ -35,6 +43,7 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
             },
             symbolic: self.identity().symbolic_id(),
             local_index: index,
+            properties,
         }
     }
     /// Return the runtime identity
@@ -51,5 +60,15 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
     /// Return the child rule as a reference
     pub(crate) fn child(&'a self) -> Option<&'a Rule<'a, T>> {
         self.children.as_ref()
+    }
+
+    pub const fn properties(mut self, properties: &'a [PropertyDef<'a, T>]) -> Self {
+        self.properties = Some(properties);
+        self
+    }
+
+    /// Return properties rule as a reference
+    pub(crate) fn props(&'a self) -> Option<&'a &'a [PropertyDef<'a, T>]> {
+        self.properties.as_ref()
     }
 }
