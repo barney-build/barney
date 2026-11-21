@@ -9,7 +9,7 @@
 use bny_slots::Block;
 use bny_syntax::BnyInterner;
 
-use crate::{NodeSpec, PropertyDef, Rule, SchemaKey, SchemaName};
+use crate::{NodeSpec, Occurrence, PropertyDef, Rule, SchemaKey, SchemaName};
 
 /// Node schema
 #[derive(Debug)]
@@ -17,6 +17,7 @@ pub struct NodeDef<'a, T: SchemaKey<'a>> {
     identity: T,
     children: Option<Rule<'a, T>>,
     properties: Option<&'a [PropertyDef<'a, T>]>,
+    occurrence: Occurrence,
 }
 
 /// Construct a new node definition
@@ -25,6 +26,7 @@ pub const fn node_def<'a, T: SchemaKey<'a>>(identity: T) -> NodeDef<'a, T> {
         identity,
         children: None,
         properties: None,
+        occurrence: Occurrence::unbounded(),
     }
 }
 
@@ -44,6 +46,8 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
             symbolic: self.identity().symbolic_id(),
             local_index: index,
             properties,
+            global_index: None,
+            occurrence: self.occurrence,
         }
     }
     /// Return the runtime identity
@@ -70,5 +74,11 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
     /// Return properties rule as a reference
     pub(crate) fn props(&'a self) -> Option<&'a &'a [PropertyDef<'a, T>]> {
         self.properties.as_ref()
+    }
+
+    /// Control the occurrence rules for this node
+    pub const fn occurrence(mut self, occurrence: Occurrence) -> Self {
+        self.occurrence = occurrence;
+        self
     }
 }

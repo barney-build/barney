@@ -6,7 +6,7 @@
 use bny_slots::Block;
 use bny_syntax::StringId;
 
-use crate::{BnyValueType, registry::SchemaIndex};
+use crate::{BnyValueType, Occurrence, registry::SchemaIndex};
 
 /// Type-erasure contract for NodeDef
 #[derive(Debug, Clone, Copy)]
@@ -22,6 +22,12 @@ pub struct NodeSpec {
 
     /// Storage address of property rules
     pub(crate) properties: Option<Block>,
+
+    /// Permitted occurrence rules
+    pub(crate) occurrence: Occurrence,
+
+    /// Empty / useless until hitting linked registry
+    pub(crate) global_index: Option<usize>,
 }
 
 /// Type-erasure contract for PropertyDef

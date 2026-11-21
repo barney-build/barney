@@ -9,6 +9,8 @@
 mod compiled;
 pub use compiled::{BnySchema, BnySchemaId};
 
+mod diagnostics;
+
 mod key;
 pub use key::*;
 
@@ -17,6 +19,9 @@ pub use schema::{SchemaDef, SchemaRef};
 
 mod node;
 pub use node::{NodeDef, node_def};
+
+mod occurrence;
+pub use occurrence::{Occurrence, OccurrenceError};
 
 mod rule;
 pub use rule::Rule;
@@ -38,6 +43,7 @@ pub use value::{AsBnyValueType, BnyValueType, ValueError};
 
 #[cfg(test)]
 mod tests {
+    use bny_diag::DiagnosticSink;
     use bny_syntax::{BnyInterner, BnySpec};
     use itertools::Itertools;
 
@@ -48,7 +54,7 @@ mod tests {
 
     mod test_recipe_schema {
         use crate::{
-            PropertyDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def,
+            Occurrence, PropertyDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def,
             tests::test_script_schema,
         };
 
@@ -82,6 +88,7 @@ mod tests {
         pub static ID: SchemaRef = SchemaRef("barney.test.pkg.schema");
         pub static SCHEMA: SchemaDef<RecipeKeys> = SchemaDef::new(ID).children(&[
             &node_def(RecipeKeys::MetaNode)
+                .occurrence(Occurrence::exactly(1))
                 .properties(&[PropertyDef::new::<&str>(RecipeKeys::MetaId)])
                 .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNode)
                     .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNodeBugs)]))])),
@@ -176,7 +183,8 @@ mod tests {
         let spec = BnySpec::new(test_doc);
         let tree = spec.process(&mut intern);
 
-        let valid = linked.validate(&tree, &intern);
+        let mut sink = DiagnosticSink::new();
+        let valid = linked.validate(&tree, &intern, &mut sink);
         let build = valid
             .nodes(RecipeKeys::Build)
             .expect("should have build nodes")

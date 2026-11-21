@@ -2,11 +2,13 @@
 name = "bny_schema"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.96"
+rust-version = "1.98"
 
 [dependencies]
-bny_slots = {path = "../bny_slots" }
+bny_diag = { path = "../bny_diag" }
+bny_slots = { path = "../bny_slots" }
 bny_syntax = { path = "../bny_syntax" }
 indextree.workspace = true
 itertools.workspace = true
 thiserror.workspace = true
+miette.workspace = true

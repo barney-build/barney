@@ -5,6 +5,7 @@
 
 use std::collections::VecDeque;
 
+use crate::diagnostics::{SchemaDiagnostic, reporting};
 use crate::value::ValueError;
 use crate::{
     AsBnyValueType, BnySchema, BnyValueType, NodeSpec, PropertySpec, SchemaIndex, SchemaKey,
@@ -13,9 +14,11 @@ use crate::{
     spec::RuleSpec,
     value::{self},
 };
+use bny_diag::DiagnosticSink;
 use bny_slots::{Block, LinkedSlotStorage, SlotStorage};
 use bny_syntax::{BnyInterner, BnyNodeRef, BnyPropertyRef, BnyTree, ProcessedValue};
 use indextree::{Arena, NodeId};
+use itertools::{Either, Itertools};
 use thiserror::Error;
 
 /// Every node is paired to a contextual set of rules
@@ -45,9 +48,9 @@ struct Match {
 /// Validated document is a read only view of the
 /// schema validated input
 #[derive(Debug)]
-pub struct ValidatedDocument<'a, 'b> {
+pub struct ValidatedDocument<'a> {
     registry: &'a LinkedSchemaRegistry,
-    tree: &'a BnyTree<'b>,
+    tree: &'a BnyTree<'a>,
 
     slots: LinkedSlotStorage<MatchId>,
     arena: Arena<Match>,
@@ -66,11 +69,11 @@ enum PropertyMatchResult {
     Unmatched,
 }
 
-impl<'a, 'b> ValidatedDocument<'a, 'b> {
+impl<'a> ValidatedDocument<'a> {
     fn property_processor(
         node: &BnyNodeRef,
-        property: &'a PropertySpec,
-        tree: &'a BnyTree<'b>,
+        property: &PropertySpec,
+        tree: &BnyTree<'a>,
     ) -> PropertyMatchResult {
         for disc_prop in node.properties(tree) {
             if let Some(prop_id) = property.id
@@ -120,15 +123,14 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         PropertyMatchResult::Unmatched
     }
 
-    fn process_rules(
+    fn process_rules_internal(
         rules: impl Iterator<Item = BnyRuleRef>,
-        schema: &'a BnySchema,
-        tree: &'a BnyTree<'b>,
+        schema: &BnySchema,
+        tree: &BnyTree<'a>,
         frame: ValidationFrame,
     ) -> ValidationResult {
         let frame_name = frame.node.name(tree);
 
-        // TODO: Loop twice by filter to ensure wildcard is last
         for rule in rules.into_iter() {
             match rule.rule(schema) {
                 RuleSpec::MatchNode(node_spec) => {
@@ -157,8 +159,33 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         ValidationResult::Unmatched
     }
 
+    fn process_rules(
+        rules: impl Iterator<Item = BnyRuleRef>,
+        schema: &BnySchema,
+        tree: &BnyTree<'a>,
+        frame: ValidationFrame,
+    ) -> ValidationResult {
+        let (normal, wildcard): (Vec<_>, Vec<_>) =
+            rules.into_iter().partition_map(|p| match p.rule(schema) {
+                RuleSpec::MatchNode(node_spec) => {
+                    if node_spec.id.is_some() {
+                        Either::Left(p)
+                    } else {
+                        Either::Right(p)
+                    }
+                }
+                _ => Either::Left(p),
+            });
+        match Self::process_rules_internal(normal.into_iter(), schema, tree, frame) {
+            ValidationResult::Unmatched => {
+                Self::process_rules_internal(wildcard.into_iter(), schema, tree, frame)
+            }
+            res => res,
+        }
+    }
+
     /// Chaining children slots
-    fn count_slot_storage(schema: &'a BnySchema, rules: impl Iterator<Item = BnyRuleRef>) -> usize {
+    fn count_slot_storage(schema: &BnySchema, rules: impl Iterator<Item = BnyRuleRef>) -> usize {
         rules
             .filter_map(|r| match r.rule(schema) {
                 RuleSpec::MatchNode(node_spec) => Some(node_spec.local_index + 1),
@@ -169,9 +196,9 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
     }
 
     fn child_context(
-        registry: &'a LinkedSchemaRegistry,
+        registry: &LinkedSchemaRegistry,
         schema_id: SchemaIndex,
-        schema: &'a BnySchema,
+        schema: &BnySchema,
         rules: impl Iterator<Item = BnyRuleRef>,
     ) -> (SchemaIndex, usize) {
         let mut count = 0;
@@ -197,11 +224,11 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
     }
 
     /// Return a document view with all validation performed
-    /// TODO: Also store all diagnostics along the way and validate bounds/occurence
     pub(super) fn new(
         registry: &'a LinkedSchemaRegistry,
-        tree: &'a BnyTree<'b>,
+        tree: &'a BnyTree<'a>,
         intern: &'a BnyInterner,
+        sink: &mut DiagnosticSink,
     ) -> Self {
         // Initial queue of root level rules + nodes
         let mut work_queue: VecDeque<ValidationFrame> = VecDeque::new();
@@ -220,6 +247,9 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         let mut slots = LinkedSlotStorage::new();
         let root_slots = slots.allocate(n_roots);
         let mut property_matches = SlotStorage::new();
+
+        let mut rule_tracking = LinkedSlotStorage::new();
+        let rule_block = rule_tracking.allocate(registry.global_nodes());
 
         while let Some(frame) = work_queue.pop_front() {
             let schema = &registry.schemas[frame.schema_id.0];
@@ -265,6 +295,11 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                         root_slots
                     };
 
+                    // Rule tracking pairs the parent-context slot storage with the rule ids for nodespecs
+                    if let Some(guid) = node_spec.global_index.as_ref() {
+                        rule_tracking.push(rule_block, *guid, Some(slot_range));
+                    }
+
                     let child_block = slots.allocate(our_child_count);
 
                     let matched_node = Match {
@@ -304,7 +339,34 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
                     })
                 }
                 // no rules matched, don't bother descending
-                ValidationResult::Unmatched => {}
+                ValidationResult::Unmatched => {
+                    let id = sink.insert_error(
+                        SchemaDiagnostic::IllegalNode {
+                            id: intern.resolve(frame.node.name(tree)).to_owned(),
+                        },
+                        None,
+                    );
+                    sink.push_span(id, frame.node.span(tree), reporting::FIRST_SEEN);
+                }
+            }
+        }
+
+        for rule_id in 0..registry.global_nodes() {
+            for parent_set in rule_tracking.iter(rule_block, rule_id).flatten() {
+                let rule_children = slots.iter(*parent_set, rule_id).count();
+                if let Some(RuleSpec::MatchNode(n)) = registry.global_node(rule_id)
+                    && let Err(e) = n.occurrence.validate(rule_children as u8) {
+                        let diag = sink.insert_error(e, None);
+                        for (child_idx, child) in slots.iter(*parent_set, rule_id).enumerate() {
+                            let node = arena[child.0].get();
+                            let label = if child_idx == 0 {
+                                reporting::FIRST_SEEN
+                            } else {
+                                reporting::ALSO_SEEN
+                            };
+                            sink.push_span(diag, node.node.span(tree), label);
+                        }
+                    }
             }
         }
 
@@ -324,7 +386,7 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
         parent: Option<MatchId>,
         key: T,
         schema: SchemaIndex,
-    ) -> Result<impl Iterator<Item = ValidatedNode<'a, 'b>>, ValidationError> {
+    ) -> Result<impl Iterator<Item = ValidatedNode<'a>>, ValidationError> {
         let lookup = self.registry.schemas[schema.0]
             .resolve_symbolic(key.symbolic_id())
             .ok_or_else(|| ValidationError::InvalidBinding {
@@ -373,7 +435,7 @@ impl<'a, 'b> ValidatedDocument<'a, 'b> {
     pub fn nodes<T: SchemaKey<'a>>(
         &'a self,
         key: T,
-    ) -> Result<impl Iterator<Item = ValidatedNode<'a, 'b>>, ValidationError> {
+    ) -> Result<impl Iterator<Item = ValidatedNode<'a>>, ValidationError> {
         self.get_nodes_for_parent(None, key, self.registry.entry)
     }
 
@@ -456,18 +518,18 @@ pub enum ValidationError {
 
 /// Encapsulates matching
 #[derive(Debug)]
-pub struct ValidatedNode<'a, 'b> {
+pub struct ValidatedNode<'a> {
     matched: MatchId,
-    doc: &'a ValidatedDocument<'a, 'b>,
+    doc: &'a ValidatedDocument<'a>,
     schema: SchemaIndex,
 }
 
-impl<'a, 'b> ValidatedNode<'a, 'b> {
+impl<'a> ValidatedNode<'a> {
     // Child level schema nodes
     pub fn nodes<T: SchemaKey<'a>>(
-        &'a self,
+        &self,
         key: T,
-    ) -> Result<impl Iterator<Item = ValidatedNode<'a, 'b>>, ValidationError> {
+    ) -> Result<impl Iterator<Item = ValidatedNode<'a>>, ValidationError> {
         self.doc
             .get_nodes_for_parent(Some(self.matched), key, self.schema)
     }

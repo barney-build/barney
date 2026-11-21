@@ -161,7 +161,6 @@ impl BnySchema {
     }
 
     /// Build a BnySchema from a SchemaDef
-    /// TODO: Shit the bed when we encounter duplicate symbolics
     pub fn compile<'a, T: SchemaKey<'a>>(
         intern: &mut BnyInterner,
         schema_def: &'a SchemaDef<'a, T>,
