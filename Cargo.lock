@@ -146,6 +146,7 @@ dependencies = [
 name = "bny_recipe"
 version = "0.1.0"
 dependencies = [
+ "bny_diag",
  "bny_schema",
  "bny_syntax",
 ]
@@ -154,10 +155,12 @@ dependencies = [
 name = "bny_schema"
 version = "0.1.0"
 dependencies = [
+ "bny_diag",
  "bny_slots",
  "bny_syntax",
  "indextree",
  "itertools",
+ "miette",
  "thiserror",
 ]
 
