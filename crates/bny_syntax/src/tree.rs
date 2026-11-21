@@ -131,7 +131,7 @@ impl BnyNodeRef {
     }
 
     /// Returns node span
-    pub fn span(&self, tree: BnyTree) -> SourceSpan {
+    pub fn span(&self, tree: &BnyTree) -> SourceSpan {
         tree.arena[self.id].get().span
     }
 }
