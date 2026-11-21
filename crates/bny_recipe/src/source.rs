@@ -3,7 +3,7 @@
 
 //! Capability and schemas for loading `.bny` recipe files
 
-use bny_schema::{Rule, SchemaDef, node_def};
+use bny_schema::{NodeDef, Rule, SchemaDef};
 
 use crate::source::schema::SourceKeys;
 
@@ -59,16 +59,18 @@ pub mod schema {
 
 /// Public source recipe schema
 /// Very skeletal right now as we flesh out the schema requirements
-pub static SCHEMA: SchemaDef<SourceKeys> =
-    SchemaDef::new(schema::ID).children(&[&node_def(SourceKeys::Root).children(Rule::Nodes(&[
-        &node_def(SourceKeys::Version),
-        &node_def(SourceKeys::Release),
-        &node_def(SourceKeys::Summary),
-        &node_def(SourceKeys::Description),
-        &node_def(SourceKeys::Properties),
-        &node_def(SourceKeys::Variant),
-        &node_def(SourceKeys::Requires),
-    ]))]);
+pub static SCHEMA: SchemaDef<SourceKeys> = SchemaDef::new(schema::ID).children(&[&NodeDef::new(
+    SourceKeys::Root,
+)
+.children(Rule::Nodes(&[
+    &NodeDef::new(SourceKeys::Version),
+    &NodeDef::new(SourceKeys::Release),
+    &NodeDef::new(SourceKeys::Summary),
+    &NodeDef::new(SourceKeys::Description),
+    &NodeDef::new(SourceKeys::Properties),
+    &NodeDef::new(SourceKeys::Variant),
+    &NodeDef::new(SourceKeys::Requires),
+]))]);
 
 #[cfg(test)]
 mod tests {
