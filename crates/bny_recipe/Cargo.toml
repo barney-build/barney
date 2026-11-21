@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bny_diag = { path = "../bny_diag" }
 bny_schema = { path = "../bny_schema" }
 bny_syntax = { path = "../bny_syntax" }

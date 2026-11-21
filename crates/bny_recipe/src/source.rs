@@ -72,6 +72,7 @@ pub static SCHEMA: SchemaDef<SourceKeys> =
 
 #[cfg(test)]
 mod tests {
+    use bny_diag::DiagnosticSink;
     use bny_schema::{BnySchema, SchemaRegistry};
     use bny_syntax::{BnyInterner, BnySpec};
 
@@ -89,6 +90,8 @@ mod tests {
         """#;
         let mut registry = SchemaRegistry::new(schema::ID);
         let mut interner = BnyInterner::default();
+        let mut sink = DiagnosticSink::new();
+
         registry
             .install(
                 BnySchema::compile(&mut interner, &SCHEMA)
@@ -101,7 +104,7 @@ mod tests {
 
         let spec = BnySpec::new(bny_file);
         let tree = spec.process(&mut interner);
-        let validated = linked.validate(&tree, &interner);
+        let validated = linked.validate(&tree, &interner, &mut sink);
 
         let recipe = validated
             .nodes(SourceKeys::Root)
