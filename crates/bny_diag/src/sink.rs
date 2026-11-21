@@ -103,17 +103,16 @@ impl DiagnosticSink {
     }
 
     /// Get a ref
-    pub fn get<'a>(&'a self, id: DiagnosticId) -> BnyDiagnosticRef<'a> {
-        BnyDiagnosticRef { sink: self, id }
+    pub fn get(&self, id: DiagnosticId) -> BnyDiagnosticRef {
+        BnyDiagnosticRef { id }
     }
 
     // Retrieve all diagnostics
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = BnyDiagnosticRef<'a>> {
+    pub fn iter(&self) -> impl Iterator<Item = BnyDiagnosticRef> {
         self.diagnostics
             .iter()
             .enumerate()
             .map(|(id, _)| BnyDiagnosticRef {
-                sink: self,
                 id: DiagnosticId(Block(Range {
                     start: id,
                     end: id + 1,
@@ -151,7 +150,7 @@ mod tests {
 #include "stdio.h"
 code nyaha }
         "#;
-        let report = miette::Report::from(diag.as_miette())
+        let report = miette::Report::from(diag.as_miette(&sink))
             .with_source_code(NamedSource::new("test.kdl", source).with_language("C"));
 
         eprintln!("{:?}", report);

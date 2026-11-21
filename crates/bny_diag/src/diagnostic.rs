@@ -11,17 +11,15 @@ use miette::{Diagnostic, LabeledSpan, Severity};
 use crate::{DiagnosticId, DiagnosticSink};
 
 #[derive(Debug)]
-pub struct BnyDiagnosticRef<'a> {
-    pub(crate) sink: &'a DiagnosticSink,
+pub struct BnyDiagnosticRef {
     pub(crate) id: DiagnosticId,
 }
 
-impl<'a> BnyDiagnosticRef<'a> {
-    pub fn as_miette(&self) -> BnyDiagnosticMiette {
-        let us: &crate::BnyDiag = self.sink.get_internal(self.id);
+impl BnyDiagnosticRef {
+    pub fn as_miette(&self, sink: &DiagnosticSink) -> BnyDiagnosticMiette {
+        let us: &crate::BnyDiag = sink.get_internal(self.id);
         let labels = if let Some(label_head) = us.labels {
-            self.sink
-                .labels
+            sink.labels
                 .iter(
                     Block(Range {
                         start: label_head,
@@ -31,7 +29,7 @@ impl<'a> BnyDiagnosticRef<'a> {
                 )
                 .enumerate()
                 .map(|(index, label)| {
-                    let label_span = self.sink.intern.resolve(&label.text).to_owned();
+                    let label_span = sink.intern.resolve(&label.text).to_owned();
                     if index == 0 {
                         LabeledSpan::new_primary_with_span(Some(label_span), label.span)
                     } else {
@@ -43,10 +41,10 @@ impl<'a> BnyDiagnosticRef<'a> {
             Vec::new()
         };
         BnyDiagnosticMiette {
-            message: self.sink.intern.resolve(&us.message).to_owned(),
+            message: sink.intern.resolve(&us.message).to_owned(),
             severity: us.severity,
             labels,
-            help: us.help.map(|h| self.sink.intern.resolve(&h).to_owned()),
+            help: us.help.map(|h| sink.intern.resolve(&h).to_owned()),
         }
     }
 }
