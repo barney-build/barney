@@ -62,10 +62,7 @@ pub struct ValidatedDocument<'a> {
 
 #[derive(Debug, Clone, Copy)]
 enum PropertyMatchResult {
-    Matched {
-        prop_ref: BnyPropertyRef,
-        kind: BnyValueType,
-    },
+    Matched { prop_ref: BnyPropertyRef },
     Unmatched,
 }
 
@@ -74,6 +71,7 @@ impl<'a> ValidatedDocument<'a> {
         node: &BnyNodeRef,
         property: &PropertySpec,
         tree: &BnyTree<'a>,
+        sink: &mut DiagnosticSink,
     ) -> PropertyMatchResult {
         for disc_prop in node.properties(tree) {
             if let Some(prop_id) = property.id
@@ -81,7 +79,6 @@ impl<'a> ValidatedDocument<'a> {
             {
                 continue;
             }
-            // TODO: Supplement diagnostics
             let stored_kind = match disc_prop.value(tree) {
                 ProcessedValue::Boolean(_) => BnyValueType::Bool,
                 ProcessedValue::Float(_) => BnyValueType::Float,
@@ -109,15 +106,30 @@ impl<'a> ValidatedDocument<'a> {
                     };
                     match conversion {
                         Ok(c) => c,
-                        Err(_) => BnyValueType::Unknown,
+                        Err(e) => {
+                            let id = sink.insert_error(e, None);
+                            sink.push_span(id, disc_prop.value_span(tree), reporting::PROPERTY);
+                            BnyValueType::Unknown
+                        }
                     }
                 }
                 ProcessedValue::Null => BnyValueType::Unknown,
             };
-            // TODO: Add constraints testing
+
+            if stored_kind != property.kind {
+                let id = sink.insert_error(
+                    SchemaDiagnostic::WrongValueType {
+                        schema: property.kind.to_string(),
+                        found: stored_kind.to_string(),
+                    },
+                    None,
+                );
+                sink.push_span(id, disc_prop.value_span(tree), reporting::PROPERTY);
+                return PropertyMatchResult::Unmatched;
+            }
+
             return PropertyMatchResult::Matched {
                 prop_ref: disc_prop,
-                kind: stored_kind,
             };
         }
         PropertyMatchResult::Unmatched
@@ -281,9 +293,9 @@ impl<'a> ValidatedDocument<'a> {
 
                     // Find all matching property rules
                     for prop in rule.properties(schema, &node_spec) {
-                        let res = Self::property_processor(&node, prop, tree);
+                        let res = Self::property_processor(&node, prop, tree, sink);
                         let stored = match res {
-                            PropertyMatchResult::Matched { prop_ref, kind: _ } => Some(prop_ref),
+                            PropertyMatchResult::Matched { prop_ref } => Some(prop_ref),
                             PropertyMatchResult::Unmatched => None,
                         };
                         property_matches.set(p_block.0.start + prop.local_index, stored);
@@ -355,18 +367,19 @@ impl<'a> ValidatedDocument<'a> {
             for parent_set in rule_tracking.iter(rule_block, rule_id).flatten() {
                 let rule_children = slots.iter(*parent_set, rule_id).count();
                 if let Some(RuleSpec::MatchNode(n)) = registry.global_node(rule_id)
-                    && let Err(e) = n.occurrence.validate(rule_children as u8) {
-                        let diag = sink.insert_error(e, None);
-                        for (child_idx, child) in slots.iter(*parent_set, rule_id).enumerate() {
-                            let node = arena[child.0].get();
-                            let label = if child_idx == 0 {
-                                reporting::FIRST_SEEN
-                            } else {
-                                reporting::ALSO_SEEN
-                            };
-                            sink.push_span(diag, node.node.span(tree), label);
-                        }
+                    && let Err(e) = n.occurrence.validate(rule_children as u8)
+                {
+                    let diag = sink.insert_error(e, None);
+                    for (child_idx, child) in slots.iter(*parent_set, rule_id).enumerate() {
+                        let node = arena[child.0].get();
+                        let label = if child_idx == 0 {
+                            reporting::FIRST_SEEN
+                        } else {
+                            reporting::ALSO_SEEN
+                        };
+                        sink.push_span(diag, node.node.span(tree), label);
                     }
+                }
             }
         }
 
