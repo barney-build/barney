@@ -18,7 +18,7 @@ mod schema;
 pub use schema::{SchemaDef, SchemaRef};
 
 mod node;
-pub use node::{NodeDef, node_def};
+pub use node::NodeDef;
 
 mod occurrence;
 pub use occurrence::{Occurrence, OccurrenceError};
@@ -53,8 +53,9 @@ mod tests {
     };
 
     mod test_recipe_schema {
+
         use crate::{
-            Occurrence, PropertyDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def,
+            NodeDef, Occurrence, PropertyDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef,
             tests::test_script_schema,
         };
 
@@ -87,19 +88,21 @@ mod tests {
 
         pub static ID: SchemaRef = SchemaRef("barney.test.pkg.schema");
         pub static SCHEMA: SchemaDef<RecipeKeys> = SchemaDef::new(ID).children(&[
-            &node_def(RecipeKeys::MetaNode)
+            &NodeDef::new(RecipeKeys::MetaNode)
                 .occurrence(Occurrence::exactly(1))
                 .properties(&[PropertyDef::new::<&str>(RecipeKeys::MetaId)])
-                .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNode)
-                    .children(Rule::Nodes(&[&node_def(RecipeKeys::LinksNodeBugs)]))])),
-            &node_def(RecipeKeys::Build).children(Rule::External(test_script_schema::ID)),
+                .children(Rule::Nodes(&[&NodeDef::new(RecipeKeys::LinksNode)
+                    .children(Rule::Nodes(&[&NodeDef::new(
+                        RecipeKeys::LinksNodeBugs,
+                    )]))])),
+            &NodeDef::new(RecipeKeys::Build).children(Rule::External(test_script_schema::ID)),
         ]);
     }
 
     mod test_script_schema {
         //! Testing embedded recursive script schema
 
-        use crate::{Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef, node_def};
+        use crate::{NodeDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef};
 
         #[repr(u8)]
         #[derive(Debug, Clone, Copy)]
@@ -126,11 +129,11 @@ mod tests {
         pub static ID: SchemaRef = SchemaRef("barney.test.script.schema");
         pub static SCHEMA: SchemaDef<TestKeys> = SchemaDef::new(ID).children(&[
             // `with` conditionals, recursive schema
-            &node_def(TestKeys::WithNode).children(Rule::External(ID)),
+            &NodeDef::new(TestKeys::WithNode).children(Rule::External(ID)),
             // `foreach` conditionals, recursive schema
-            &node_def(TestKeys::ForeachNode).children(Rule::External(ID)),
+            &NodeDef::new(TestKeys::ForeachNode).children(Rule::External(ID)),
             // anything else is an invocation
-            &node_def(TestKeys::InvokeNode),
+            &NodeDef::new(TestKeys::InvokeNode),
         ]);
     }
     // Basic schema const-verification

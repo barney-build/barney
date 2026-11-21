@@ -20,17 +20,17 @@ pub struct NodeDef<'a, T: SchemaKey<'a>> {
     occurrence: Occurrence,
 }
 
-/// Construct a new node definition
-pub const fn node_def<'a, T: SchemaKey<'a>>(identity: T) -> NodeDef<'a, T> {
-    NodeDef {
-        identity,
-        children: None,
-        properties: None,
-        occurrence: Occurrence::unbounded(),
-    }
-}
-
 impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
+    /// Construct a new node definition
+    pub const fn new(identity: T) -> Self {
+        Self {
+            identity,
+            children: None,
+            properties: None,
+            occurrence: Occurrence::unbounded(),
+        }
+    }
+
     /// Erase type into NodeSpec for compilation
     pub(crate) fn spec(
         &self,
