@@ -81,8 +81,16 @@ impl BnyPropertyRef {
         tree.props[self.id].get().name
     }
 
+    pub fn name_span<'a>(&'a self, tree: &'a BnyTree) -> SourceSpan {
+        tree.props[self.id].get().name_span
+    }
+
     pub fn value<'a>(&self, tree: &'a BnyTree) -> &'a ProcessedValue {
         &tree.props[self.id].get().value
+    }
+
+    pub fn value_span(&self, tree: &BnyTree) -> SourceSpan {
+        tree.props[self.id].get().value_span
     }
 }
 
