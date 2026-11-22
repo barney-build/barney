@@ -10,7 +10,9 @@ use bny_syntax::{BnyInterner, StringId};
 use indextree::{Arena, NodeId};
 use thiserror::Error;
 
-use crate::{NodeDef, NodeSpec, PropertySpec, Rule, SchemaDef, SchemaKey, spec::RuleSpec};
+use crate::{
+    ArgumentSpec, NodeDef, NodeSpec, PropertySpec, Rule, SchemaDef, SchemaKey, spec::RuleSpec,
+};
 
 const MAX_RULES: usize = (u8::MAX as usize) + 1;
 
@@ -32,6 +34,7 @@ pub struct BnySchema {
     // tiny table for easy rules
     table: BindingTable,
     pub(super) props: SlotStorage<PropertySpec>,
+    pub(super) args: SlotStorage<ArgumentSpec>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -80,6 +83,10 @@ pub(crate) enum BindingReference {
         id: BnySchemaId,
         local_offset: u8,
     },
+    Argument {
+        id: BnySchemaId,
+        local_offset: u8,
+    },
 }
 
 impl BnyRuleRef {
@@ -104,6 +111,17 @@ impl BnyRuleRef {
             .iter()
             .flatten()
             .map(|idx| schema.props.get(idx))
+    }
+
+    pub fn arguments<'a>(
+        &self,
+        schema: &'a BnySchema,
+        spec: &NodeSpec,
+    ) -> impl Iterator<Item = &'a ArgumentSpec> {
+        spec.arguments
+            .iter()
+            .flatten()
+            .map(|idx| schema.args.get(idx))
     }
 }
 
@@ -135,8 +153,25 @@ impl BnySchema {
         }
     }
 
+    fn build_arguments<'a, T: SchemaKey<'a>>(
+        argument_rules: &mut SlotStorage<ArgumentSpec>,
+        node: &'a NodeDef<'a, T>,
+    ) -> Option<Block> {
+        match node.args() {
+            // Explicit property rules
+            Some(args) => {
+                let arg_block = argument_rules.allocate(args.len(), Default::default);
+                for (arg_idx, arg) in args.iter().enumerate() {
+                    argument_rules.set(arg_block.0.start + arg_idx, arg.spec(arg_idx));
+                }
+                Some(arg_block)
+            }
+            // None supported
+            None => None,
+        }
+    }
+
     /// Add a rule node into the tree
-    /// TODO: NodeSpec needs to include all PropertySpec/ArgSpec
     fn add_rule(
         nodes: &mut Arena<RuleSpec>,
         spec: RuleSpec,
@@ -178,10 +213,12 @@ impl BnySchema {
                 .rev(),
         );
         let mut property_rules: SlotStorage<PropertySpec> = SlotStorage::new();
+        let mut argument_rules: SlotStorage<ArgumentSpec> = SlotStorage::new();
 
         while let Some((index, (node, parent))) = processing.pop() {
             let property_area = Self::build_properties(&mut property_rules, intern, node);
-            let spec = node.spec(intern, index, property_area);
+            let argument_area = Self::build_arguments(&mut argument_rules, node);
+            let spec = node.spec(intern, index, property_area, argument_area);
             let symbolic = spec.symbolic;
             let rule = RuleSpec::MatchNode(spec);
             let id = Self::add_rule(&mut nodes, rule, parent);
@@ -203,6 +240,16 @@ impl BnySchema {
                 table.insert_binding(prop.symbolic, binding)?;
             }
 
+            // Bind the arguments
+            for (local_offset, arg_idx) in argument_area.iter().flatten().enumerate() {
+                let arg = argument_rules.get(arg_idx);
+                let binding = BindingReference::Argument {
+                    id,
+                    local_offset: u8::try_from(local_offset)?,
+                };
+                table.insert_binding(arg.symbolic, binding)?;
+            }
+
             match node.child() {
                 Some(Rule::Nodes(nodes)) => {
                     processing.extend(nodes.iter().map(move |n| (n, Some(id))).enumerate().rev());
@@ -219,6 +266,7 @@ impl BnySchema {
             id: intern.intern(schema_def.id().0),
             table,
             props: property_rules,
+            args: argument_rules,
         })
     }
 
