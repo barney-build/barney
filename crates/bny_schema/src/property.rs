@@ -5,7 +5,7 @@
 
 use bny_syntax::BnyInterner;
 
-use crate::{AsBnyValueType, BnyValueType, SchemaKey, SchemaName, spec::PropertySpec};
+use crate::{AsOptionalBnyValueType, BnyValueType, SchemaKey, SchemaName, spec::PropertySpec};
 use std::marker::PhantomData;
 
 /// Property schema
@@ -28,7 +28,7 @@ impl<'a, K> PropertyDef<'a, K>
 where
     K: SchemaKey<'a>,
 {
-    pub const fn new<T: AsBnyValueType<'a>>(identity: K) -> Self {
+    pub const fn new<T: AsOptionalBnyValueType<'a>>(identity: K) -> Self {
         Self {
             _data: PhantomData,
             identity,
