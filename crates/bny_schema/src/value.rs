@@ -30,6 +30,44 @@ pub enum BnyValueType {
     Unknown,
 }
 
+impl BnyValueType {
+    pub fn from_syntax_value(
+        proc: &ProcessedValue,
+        ref_type: BnyValueType,
+    ) -> Result<Self, ValueError> {
+        let what = match proc {
+            ProcessedValue::Boolean(_) => BnyValueType::Bool,
+            ProcessedValue::Float(_) => BnyValueType::Float,
+            ProcessedValue::String(_) => BnyValueType::String,
+            ProcessedValue::Integer(i) => {
+                // we kinda have to accept the wanted integer kind at this point
+                match ref_type {
+                    // i32
+                    BnyValueType::Int32 => i32::try_from(*i)
+                        .map(|_| BnyValueType::Int32)
+                        .map_err(ValueError::ConvertInt),
+                    // u32
+                    BnyValueType::Uint32 => u32::try_from(*i)
+                        .map(|_| BnyValueType::Uint32)
+                        .map_err(ValueError::ConvertInt),
+                    // i64
+                    BnyValueType::Int64 => i64::try_from(*i)
+                        .map(|_| BnyValueType::Int64)
+                        .map_err(ValueError::ConvertInt),
+                    // u64
+                    BnyValueType::Uint64 => u64::try_from(*i)
+                        .map(|_| BnyValueType::Uint64)
+                        .map_err(ValueError::ConvertInt),
+                    _ => Ok(BnyValueType::Unknown),
+                }?
+            }
+            ProcessedValue::Null => BnyValueType::Unknown,
+        };
+
+        Ok(what)
+    }
+}
+
 impl Display for BnyValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let id = match self {
@@ -59,15 +97,17 @@ pub enum ValueError {
 /// A locked down mapping of permitted base value types
 pub trait AsBnyValueType<'a>: private::Sealed + Sized {
     const TYPE: BnyValueType;
-    const REQUIRED: bool;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError>;
+}
+
+pub trait AsOptionalBnyValueType<'a>: AsBnyValueType<'a> {
+    const REQUIRED: bool = true;
 }
 
 // String types
 impl<'a> AsBnyValueType<'a> for &'a str {
     const TYPE: BnyValueType = BnyValueType::String;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -76,12 +116,12 @@ impl<'a> AsBnyValueType<'a> for &'a str {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for &'a str {}
 impl private::Sealed for &str {}
 
 // Boolean types
 impl<'a> AsBnyValueType<'a> for bool {
     const TYPE: BnyValueType = BnyValueType::Bool;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -90,12 +130,12 @@ impl<'a> AsBnyValueType<'a> for bool {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for bool {}
 impl private::Sealed for bool {}
 
 // float types
 impl<'a> AsBnyValueType<'a> for f64 {
     const TYPE: BnyValueType = BnyValueType::Float;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -104,12 +144,12 @@ impl<'a> AsBnyValueType<'a> for f64 {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for f64 {}
 impl private::Sealed for f64 {}
 
 // i32
 impl<'a> AsBnyValueType<'a> for i32 {
     const TYPE: BnyValueType = BnyValueType::Int32;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -118,12 +158,12 @@ impl<'a> AsBnyValueType<'a> for i32 {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for i32 {}
 impl private::Sealed for i32 {}
 
 // u32
 impl<'a> AsBnyValueType<'a> for u32 {
     const TYPE: BnyValueType = BnyValueType::Uint32;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -132,12 +172,12 @@ impl<'a> AsBnyValueType<'a> for u32 {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for u32 {}
 impl private::Sealed for u32 {}
 
 // i64
 impl<'a> AsBnyValueType<'a> for i64 {
     const TYPE: BnyValueType = BnyValueType::Int64;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -146,12 +186,12 @@ impl<'a> AsBnyValueType<'a> for i64 {
         }
     }
 }
+impl<'a> AsOptionalBnyValueType<'a> for i64 {}
 impl private::Sealed for i64 {}
 
 // u64
 impl<'a> AsBnyValueType<'a> for u64 {
     const TYPE: BnyValueType = BnyValueType::Uint64;
-    const REQUIRED: bool = true;
 
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
@@ -160,7 +200,7 @@ impl<'a> AsBnyValueType<'a> for u64 {
         }
     }
 }
-
+impl<'a> AsOptionalBnyValueType<'a> for u64 {}
 impl private::Sealed for u64 {}
 
 // Option<T> types
@@ -170,8 +210,6 @@ where
 {
     const TYPE: BnyValueType = T::TYPE;
 
-    const REQUIRED: bool = false;
-
     fn from_processed_value(value: Option<&'a ProcessedValue>) -> Result<Self, ValueError> {
         match value.as_ref() {
             Some(s) => Ok(Some(T::from_processed_value(Some(s))?)),
@@ -179,4 +217,9 @@ where
         }
     }
 }
+
+impl<'a, T: AsBnyValueType<'a>> AsOptionalBnyValueType<'a> for Option<T> {
+    const REQUIRED: bool = false;
+}
+
 impl<T> private::Sealed for Option<T> {}
