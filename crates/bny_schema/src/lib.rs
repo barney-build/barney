@@ -6,6 +6,9 @@
 //! The bny_schema crate is built atop bny_syntax to
 //! provide validation of `.bny` files and rich diagnostics.
 
+mod argument;
+pub use argument::ArgumentDef;
+
 mod compiled;
 pub use compiled::{BnySchema, BnySchemaId};
 
@@ -30,7 +33,7 @@ mod property;
 pub use property::PropertyDef;
 
 mod spec;
-pub use spec::{NodeSpec, PropertySpec};
+pub use spec::{ArgumentSpec, NodeSpec, PropertySpec};
 
 mod registry;
 pub use registry::{RegistryError, SchemaIndex, SchemaRegistry};
@@ -39,7 +42,7 @@ mod validated;
 pub use validated::ValidatedDocument;
 
 mod value;
-pub use value::{AsBnyValueType, BnyValueType, ValueError};
+pub use value::{AsBnyValueType, AsOptionalBnyValueType, BnyValueType, ValueError};
 
 #[cfg(test)]
 mod tests {
@@ -89,7 +92,7 @@ mod tests {
         pub static ID: SchemaRef = SchemaRef("barney.test.pkg.schema");
         pub static SCHEMA: SchemaDef<RecipeKeys> = SchemaDef::new(ID).children(&[
             &NodeDef::new(RecipeKeys::MetaNode)
-                .occurrence(Occurrence::exactly(1))
+                .occurrence(Occurrence::maximum(2))
                 .properties(&[PropertyDef::new::<&str>(RecipeKeys::MetaId)])
                 .children(Rule::Nodes(&[&NodeDef::new(RecipeKeys::LinksNode)
                     .children(Rule::Nodes(&[&NodeDef::new(
@@ -102,12 +105,14 @@ mod tests {
     mod test_script_schema {
         //! Testing embedded recursive script schema
 
-        use crate::{NodeDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef};
+        use crate::{ArgumentDef, NodeDef, Rule, SchemaDef, SchemaKey, SchemaName, SchemaRef};
 
         #[repr(u8)]
         #[derive(Debug, Clone, Copy)]
         pub enum TestKeys {
             WithNode,
+            WithArg,
+            WithArg1,
             ForeachNode,
             InvokeNode,
         }
@@ -122,6 +127,7 @@ mod tests {
                     TestKeys::WithNode => SchemaName::Explicit("with"),
                     TestKeys::ForeachNode => SchemaName::Explicit("foreach"),
                     TestKeys::InvokeNode => SchemaName::Dynamic,
+                    _ => SchemaName::Dynamic,
                 }
             }
         }
@@ -129,7 +135,12 @@ mod tests {
         pub static ID: SchemaRef = SchemaRef("barney.test.script.schema");
         pub static SCHEMA: SchemaDef<TestKeys> = SchemaDef::new(ID).children(&[
             // `with` conditionals, recursive schema
-            &NodeDef::new(TestKeys::WithNode).children(Rule::External(ID)),
+            &NodeDef::new(TestKeys::WithNode)
+                .children(Rule::External(ID))
+                .arguments(&[
+                    ArgumentDef::positional::<&str>(TestKeys::WithArg1),
+                    ArgumentDef::variadic::<&str>(TestKeys::WithArg),
+                ]),
             // `foreach` conditionals, recursive schema
             &NodeDef::new(TestKeys::ForeachNode).children(Rule::External(ID)),
             // anything else is an invocation
@@ -164,7 +175,7 @@ mod tests {
             }
             meta id="i am fine :D"
             build {
-                with {
+                with multiple strings are unprocessed {
                     chickens
                     bobsled
                     with {

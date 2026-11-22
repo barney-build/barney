@@ -5,10 +5,11 @@
 
 use std::collections::VecDeque;
 
+use crate::argument::ArgumentKind;
 use crate::diagnostics::{SchemaDiagnostic, reporting};
-use crate::value::ValueError;
+use crate::{ArgumentSpec, AsBnyValueType, AsOptionalBnyValueType};
 use crate::{
-    AsBnyValueType, BnySchema, BnyValueType, NodeSpec, PropertySpec, SchemaIndex, SchemaKey,
+    BnySchema, BnyValueType, NodeSpec, PropertySpec, SchemaIndex, SchemaKey,
     compiled::{BindingReference, BnyRuleRef},
     registry::LinkedSchemaRegistry,
     spec::RuleSpec,
@@ -16,7 +17,7 @@ use crate::{
 };
 use bny_diag::DiagnosticSink;
 use bny_slots::{Block, LinkedSlotStorage, SlotStorage};
-use bny_syntax::{BnyInterner, BnyNodeRef, BnyPropertyRef, BnyTree, ProcessedValue};
+use bny_syntax::{BnyArgumentRef, BnyInterner, BnyNodeRef, BnyPropertyRef, BnyTree};
 use indextree::{Arena, NodeId};
 use itertools::{Either, Itertools};
 use thiserror::Error;
@@ -43,6 +44,8 @@ struct Match {
     schema: SchemaIndex,
     props: Block,
     prop_defs: Option<Block>,
+    args: Block,
+    arg_defs: Option<Block>,
 }
 
 /// Validated document is a read only view of the
@@ -58,6 +61,7 @@ pub struct ValidatedDocument<'a> {
     intern: &'a BnyInterner,
 
     property_matches: SlotStorage<Option<BnyPropertyRef>>,
+    argument_matches: LinkedSlotStorage<BnyArgumentRef>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,7 +70,39 @@ enum PropertyMatchResult {
     Unmatched,
 }
 
+enum ArgumentMatchResult<'a> {
+    Matched {
+        arg_ref: BnyArgumentRef,
+        next_arg: Option<&'a ArgumentSpec>,
+    },
+    Unmatched,
+}
+
 impl<'a> ValidatedDocument<'a> {
+    /// Argument processing for a while let loop
+    fn argument_processor(
+        rule: &'a ArgumentSpec,
+        arg_rules: &mut impl Iterator<Item = &'a ArgumentSpec>,
+        arguments: &mut impl Iterator<Item = BnyArgumentRef>,
+    ) -> ArgumentMatchResult<'a> {
+        match rule.arg_kind {
+            ArgumentKind::Positional => match arguments.next() {
+                Some(arg_ref) => ArgumentMatchResult::Matched {
+                    arg_ref,
+                    next_arg: arg_rules.next(),
+                },
+                None => ArgumentMatchResult::Unmatched,
+            },
+            ArgumentKind::Variadic => match arguments.next() {
+                Some(arg_ref) => ArgumentMatchResult::Matched {
+                    arg_ref,
+                    next_arg: Some(rule),
+                },
+                None => ArgumentMatchResult::Unmatched,
+            },
+        }
+    }
+
     fn property_processor(
         node: &BnyNodeRef,
         property: &PropertySpec,
@@ -79,43 +115,8 @@ impl<'a> ValidatedDocument<'a> {
             {
                 continue;
             }
-            let stored_kind = match disc_prop.value(tree) {
-                ProcessedValue::Boolean(_) => BnyValueType::Bool,
-                ProcessedValue::Float(_) => BnyValueType::Float,
-                ProcessedValue::String(_) => BnyValueType::String,
-                ProcessedValue::Integer(i) => {
-                    // we kinda have to accept the wanted integer kind at this point
-                    let conversion = match property.kind {
-                        // i32
-                        BnyValueType::Int32 => i32::try_from(*i)
-                            .map(|_| BnyValueType::Int32)
-                            .map_err(ValueError::ConvertInt),
-                        // u32
-                        BnyValueType::Uint32 => u32::try_from(*i)
-                            .map(|_| BnyValueType::Uint32)
-                            .map_err(ValueError::ConvertInt),
-                        // i64
-                        BnyValueType::Int64 => i64::try_from(*i)
-                            .map(|_| BnyValueType::Int64)
-                            .map_err(ValueError::ConvertInt),
-                        // u64
-                        BnyValueType::Uint64 => u64::try_from(*i)
-                            .map(|_| BnyValueType::Uint64)
-                            .map_err(ValueError::ConvertInt),
-                        _ => Ok(BnyValueType::Unknown),
-                    };
-                    match conversion {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let id = sink.insert_error(e, None);
-                            sink.push_span(id, disc_prop.value_span(tree), reporting::PROPERTY);
-                            BnyValueType::Unknown
-                        }
-                    }
-                }
-                ProcessedValue::Null => BnyValueType::Unknown,
-            };
-
+            let stored_kind = BnyValueType::from_syntax_value(disc_prop.value(tree), property.kind)
+                .unwrap_or(BnyValueType::Unknown);
             if stored_kind != property.kind {
                 let id = sink.insert_error(
                     SchemaDiagnostic::WrongValueType {
@@ -259,6 +260,7 @@ impl<'a> ValidatedDocument<'a> {
         let mut slots = LinkedSlotStorage::new();
         let root_slots = slots.allocate(n_roots);
         let mut property_matches = SlotStorage::new();
+        let mut argument_matches = LinkedSlotStorage::new();
 
         let mut rule_tracking = LinkedSlotStorage::new();
         let rule_block = rule_tracking.allocate(registry.global_nodes());
@@ -301,18 +303,60 @@ impl<'a> ValidatedDocument<'a> {
                         property_matches.set(p_block.0.start + prop.local_index, stored);
                     }
 
+                    // Reserve arguments..
+                    let n_arg = rule.arguments(schema, &node_spec).count();
+                    let a_block = argument_matches.allocate(n_arg);
+
+                    let mut arguments = node.arguments(tree);
+                    let mut arg_rules = &mut rule.arguments(schema, &node_spec);
+                    let mut arg_first = arg_rules.next();
+
+                    if a_block.is_empty() {
+                        arg_first = None;
+                    }
+
+                    while let Some(arg_rule) = arg_first {
+                        match Self::argument_processor(arg_rule, &mut arg_rules, &mut arguments) {
+                            // Got a match, linked list semantics for repeats of the same rule (variadic)
+                            ArgumentMatchResult::Matched { arg_ref, next_arg } => {
+                                let encountered_type = BnyValueType::from_syntax_value(
+                                    arg_ref.value(tree),
+                                    arg_rule.kind,
+                                );
+                                match encountered_type {
+                                    // Valid, push
+                                    Ok(_) => argument_matches.push(
+                                        a_block,
+                                        arg_rule.local_index,
+                                        arg_ref,
+                                    ),
+                                    // Invalid, drop
+                                    Err(e) => {
+                                        let id = sink.insert_error(e, None);
+                                        sink.push_span(id, arg_ref.span(tree), reporting::ARGUMENT);
+                                    }
+                                }
+                                arg_first = next_arg
+                            }
+                            // this slot is bork
+                            ArgumentMatchResult::Unmatched => {
+                                arg_first = arg_rules.next();
+                            }
+                        }
+                    }
+
                     let slot_range = if let Some(parent) = frame.arena_base {
                         arena[parent.0].get().child_block
                     } else {
                         root_slots
                     };
 
+                    let child_block = slots.allocate(our_child_count);
+
                     // Rule tracking pairs the parent-context slot storage with the rule ids for nodespecs
                     if let Some(guid) = node_spec.global_index.as_ref() {
                         rule_tracking.push(rule_block, *guid, Some(slot_range));
                     }
-
-                    let child_block = slots.allocate(our_child_count);
 
                     let matched_node = Match {
                         child_block,
@@ -320,6 +364,8 @@ impl<'a> ValidatedDocument<'a> {
                         schema: child_schema,
                         props: p_block,
                         prop_defs: node_spec.properties,
+                        args: a_block,
+                        arg_defs: node_spec.arguments,
                     };
 
                     // Virtual root nodes or nested?
@@ -352,33 +398,18 @@ impl<'a> ValidatedDocument<'a> {
                 }
                 // no rules matched, don't bother descending
                 ValidationResult::Unmatched => {
+                    // We have to retain original input structure so just ignore empty nodes (whitespace)
+                    let resolved = intern.resolve(frame.node.name(tree));
+                    if resolved.is_empty() {
+                        continue;
+                    }
                     let id = sink.insert_error(
                         SchemaDiagnostic::IllegalNode {
-                            id: intern.resolve(frame.node.name(tree)).to_owned(),
+                            id: intern.resolve(frame.node.name(tree)).to_string(),
                         },
                         None,
                     );
                     sink.push_span(id, frame.node.span(tree), reporting::FIRST_SEEN);
-                }
-            }
-        }
-
-        for rule_id in 0..registry.global_nodes() {
-            for parent_set in rule_tracking.iter(rule_block, rule_id).flatten() {
-                let rule_children = slots.iter(*parent_set, rule_id).count();
-                if let Some(RuleSpec::MatchNode(n)) = registry.global_node(rule_id)
-                    && let Err(e) = n.occurrence.validate(rule_children as u8)
-                {
-                    let diag = sink.insert_error(e, None);
-                    for (child_idx, child) in slots.iter(*parent_set, rule_id).enumerate() {
-                        let node = arena[child.0].get();
-                        let label = if child_idx == 0 {
-                            reporting::FIRST_SEEN
-                        } else {
-                            reporting::ALSO_SEEN
-                        };
-                        sink.push_span(diag, node.node.span(tree), label);
-                    }
                 }
             }
         }
@@ -391,6 +422,7 @@ impl<'a> ValidatedDocument<'a> {
             arena,
             root_slots,
             property_matches,
+            argument_matches,
         }
     }
 
@@ -452,7 +484,75 @@ impl<'a> ValidatedDocument<'a> {
         self.get_nodes_for_parent(None, key, self.registry.entry)
     }
 
-    fn get_property<K: AsBnyValueType<'a>>(
+    fn get_argument<K: AsBnyValueType<'a>>(
+        &'a self,
+        m: MatchId,
+        schema: SchemaIndex,
+        key: impl SchemaKey<'a>,
+    ) -> Result<K, ValidationError> {
+        let arg = self
+            .get_arguments::<K>(m, schema, key, false)?
+            .next()
+            .ok_or(ValidationError::NoArguments)?;
+        Ok(arg)
+    }
+
+    fn get_arguments<K: AsBnyValueType<'a>>(
+        &'a self,
+        m: MatchId,
+        schema: SchemaIndex,
+        key: impl SchemaKey<'a>,
+        variadic: bool,
+    ) -> Result<impl Iterator<Item = K>, ValidationError> {
+        let node = self.arena[m.0].get();
+        let arg_defs = node.arg_defs.ok_or(ValidationError::NoArguments)?;
+
+        let lookup = self.registry.schemas[schema.0]
+            .resolve_symbolic(key.symbolic_id())
+            .ok_or_else(|| ValidationError::InvalidBinding {
+                key: format!("{:?}", key),
+            })?;
+
+        let (_, local_offset) = match lookup {
+            BindingReference::Argument { id, local_offset } => (id, local_offset),
+            _ => {
+                return Err(ValidationError::ExpectedArgumentSymbolic {
+                    key: format!("{:?}", key),
+                });
+            }
+        };
+
+        let arg_rule = self.registry.schemas[schema.0]
+            .args
+            .get(arg_defs.0.start + local_offset as usize);
+
+        // ensure we respect variadic args
+        match arg_rule.arg_kind {
+            ArgumentKind::Positional => {
+                if variadic {
+                    return Err(ValidationError::InvalidBinding {
+                        key: format!("{:?}", key),
+                    });
+                }
+            }
+            ArgumentKind::Variadic => {
+                if !variadic {
+                    return Err(ValidationError::InvalidBinding {
+                        key: format!("{:?}", key),
+                    });
+                }
+            }
+        }
+
+        let m = self
+            .argument_matches
+            .iter(node.args, local_offset as usize)
+            .map(|m| m.value(self.tree))
+            .flat_map(|v| K::from_processed_value(Some(v)).ok());
+        Ok(m)
+    }
+
+    fn get_property<K: AsOptionalBnyValueType<'a>>(
         &self,
         m: MatchId,
         schema: SchemaIndex,
@@ -513,6 +613,9 @@ pub enum ValidationError {
     #[error("symbolic {key} does not point to a property rule")]
     ExpectedPropertySymbolic { key: String },
 
+    #[error("symbolic {key} does not point to an argument rule")]
+    ExpectedArgumentSymbolic { key: String },
+
     #[error(transparent)]
     ValueError(#[from] value::ValueError),
 
@@ -527,6 +630,9 @@ pub enum ValidationError {
 
     #[error("properties not supported for this node")]
     NoProperties,
+
+    #[error("arguments not supported for this node")]
+    NoArguments,
 }
 
 /// Encapsulates matching
@@ -553,11 +659,28 @@ impl<'a> ValidatedNode<'a> {
         self.doc.intern.resolve(m.node.name(self.doc.tree))
     }
 
-    pub fn property<T: AsBnyValueType<'a>>(
+    pub fn property<T: AsOptionalBnyValueType<'a>>(
         &self,
         identity: impl SchemaKey<'a>,
     ) -> Result<T, ValidationError> {
         self.doc.get_property(self.matched, self.schema, identity)
+    }
+
+    /// Return the value for a single argument
+    pub fn argument<T: AsBnyValueType<'a>>(
+        &self,
+        identity: impl SchemaKey<'a>,
+    ) -> Result<T, ValidationError> {
+        self.doc.get_argument(self.matched, self.schema, identity)
+    }
+
+    /// Return a list of values for a variadic argument range
+    pub fn arguments<T: AsBnyValueType<'a>>(
+        &self,
+        identity: impl SchemaKey<'a>,
+    ) -> Result<impl Iterator<Item = T>, ValidationError> {
+        self.doc
+            .get_arguments(self.matched, self.schema, identity, true)
     }
 }
 
