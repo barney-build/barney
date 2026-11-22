@@ -10,6 +10,7 @@ pub use node::ValidatedNode;
 
 // helpers
 mod args;
+mod props;
 
 use std::collections::VecDeque;
 
@@ -18,7 +19,7 @@ use crate::diagnostics::{SchemaDiagnostic, reporting};
 use crate::validated::node::ValidationResult;
 use crate::{AsBnyValueType, AsOptionalBnyValueType};
 use crate::{
-    BnySchema, BnyValueType, PropertySpec, SchemaIndex, SchemaKey,
+    BnySchema, SchemaIndex, SchemaKey,
     compiled::{BindingReference, BnyRuleRef},
     registry::LinkedSchemaRegistry,
     spec::RuleSpec,
@@ -71,46 +72,7 @@ pub struct ValidatedDocument<'a> {
     argument_matches: LinkedSlotStorage<BnyArgumentRef>,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum PropertyMatchResult {
-    Matched { prop_ref: BnyPropertyRef },
-    Unmatched,
-}
-
 impl<'a> ValidatedDocument<'a> {
-    fn property_processor(
-        node: &BnyNodeRef,
-        property: &PropertySpec,
-        tree: &BnyTree<'a>,
-        sink: &mut DiagnosticSink,
-    ) -> PropertyMatchResult {
-        for disc_prop in node.properties(tree) {
-            if let Some(prop_id) = property.id
-                && prop_id != disc_prop.name(tree)
-            {
-                continue;
-            }
-            let stored_kind = BnyValueType::from_syntax_value(disc_prop.value(tree), property.kind)
-                .unwrap_or(BnyValueType::Unknown);
-            if stored_kind != property.kind {
-                let id = sink.insert_error(
-                    SchemaDiagnostic::WrongValueType {
-                        schema: property.kind.to_string(),
-                        found: stored_kind.to_string(),
-                    },
-                    None,
-                );
-                sink.push_span(id, disc_prop.value_span(tree), reporting::PROPERTY);
-                return PropertyMatchResult::Unmatched;
-            }
-
-            return PropertyMatchResult::Matched {
-                prop_ref: disc_prop,
-            };
-        }
-        PropertyMatchResult::Unmatched
-    }
-
     fn process_rules_internal(
         rules: impl Iterator<Item = BnyRuleRef>,
         schema: &BnySchema,
@@ -264,23 +226,20 @@ impl<'a> ValidatedDocument<'a> {
                         rule.children(schema),
                     );
 
-                    // Reserve property slots
-                    let n_prop = rule.properties(schema, &node_spec).count();
-                    let p_block = property_matches.allocate(n_prop, || None);
-
-                    // Find all matching property rules
-                    for prop in rule.properties(schema, &node_spec) {
-                        let res = Self::property_processor(&node, prop, tree, sink);
-                        let stored = match res {
-                            PropertyMatchResult::Matched { prop_ref } => Some(prop_ref),
-                            PropertyMatchResult::Unmatched => None,
-                        };
-                        property_matches.set(p_block.0.start + prop.local_index, stored);
-                    }
-
                     // hook up arguments
                     let a_block = args::validate(
                         &mut argument_matches,
+                        tree,
+                        schema,
+                        rule,
+                        &node_spec,
+                        &node,
+                        sink,
+                    );
+
+                    // hook up properties
+                    let p_block = props::validate(
+                        &mut property_matches,
                         tree,
                         schema,
                         rule,
