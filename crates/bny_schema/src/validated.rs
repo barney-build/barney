@@ -8,12 +8,15 @@ pub use errors::ValidationError;
 mod node;
 pub use node::ValidatedNode;
 
+// helpers
+mod args;
+
 use std::collections::VecDeque;
 
 use crate::argument::ArgumentKind;
 use crate::diagnostics::{SchemaDiagnostic, reporting};
 use crate::validated::node::ValidationResult;
-use crate::{ArgumentSpec, AsBnyValueType, AsOptionalBnyValueType};
+use crate::{AsBnyValueType, AsOptionalBnyValueType};
 use crate::{
     BnySchema, BnyValueType, PropertySpec, SchemaIndex, SchemaKey,
     compiled::{BindingReference, BnyRuleRef},
@@ -74,39 +77,7 @@ enum PropertyMatchResult {
     Unmatched,
 }
 
-enum ArgumentMatchResult<'a> {
-    Matched {
-        arg_ref: BnyArgumentRef,
-        next_arg: Option<&'a ArgumentSpec>,
-    },
-    Unmatched,
-}
-
 impl<'a> ValidatedDocument<'a> {
-    /// Argument processing for a while let loop
-    fn argument_processor(
-        rule: &'a ArgumentSpec,
-        arg_rules: &mut impl Iterator<Item = &'a ArgumentSpec>,
-        arguments: &mut impl Iterator<Item = BnyArgumentRef>,
-    ) -> ArgumentMatchResult<'a> {
-        match rule.arg_kind {
-            ArgumentKind::Positional => match arguments.next() {
-                Some(arg_ref) => ArgumentMatchResult::Matched {
-                    arg_ref,
-                    next_arg: arg_rules.next(),
-                },
-                None => ArgumentMatchResult::Unmatched,
-            },
-            ArgumentKind::Variadic => match arguments.next() {
-                Some(arg_ref) => ArgumentMatchResult::Matched {
-                    arg_ref,
-                    next_arg: Some(rule),
-                },
-                None => ArgumentMatchResult::Unmatched,
-            },
-        }
-    }
-
     fn property_processor(
         node: &BnyNodeRef,
         property: &PropertySpec,
@@ -307,47 +278,16 @@ impl<'a> ValidatedDocument<'a> {
                         property_matches.set(p_block.0.start + prop.local_index, stored);
                     }
 
-                    // Reserve arguments..
-                    let n_arg = rule.arguments(schema, &node_spec).count();
-                    let a_block = argument_matches.allocate(n_arg);
-
-                    let mut arguments = node.arguments(tree);
-                    let mut arg_rules = &mut rule.arguments(schema, &node_spec);
-                    let mut arg_first = arg_rules.next();
-
-                    if a_block.is_empty() {
-                        arg_first = None;
-                    }
-
-                    while let Some(arg_rule) = arg_first {
-                        match Self::argument_processor(arg_rule, &mut arg_rules, &mut arguments) {
-                            // Got a match, linked list semantics for repeats of the same rule (variadic)
-                            ArgumentMatchResult::Matched { arg_ref, next_arg } => {
-                                let encountered_type = BnyValueType::from_syntax_value(
-                                    arg_ref.value(tree),
-                                    arg_rule.kind,
-                                );
-                                match encountered_type {
-                                    // Valid, push
-                                    Ok(_) => argument_matches.push(
-                                        a_block,
-                                        arg_rule.local_index,
-                                        arg_ref,
-                                    ),
-                                    // Invalid, drop
-                                    Err(e) => {
-                                        let id = sink.insert_error(e, None);
-                                        sink.push_span(id, arg_ref.span(tree), reporting::ARGUMENT);
-                                    }
-                                }
-                                arg_first = next_arg
-                            }
-                            // this slot is bork
-                            ArgumentMatchResult::Unmatched => {
-                                arg_first = arg_rules.next();
-                            }
-                        }
-                    }
+                    // hook up arguments
+                    let a_block = args::validate(
+                        &mut argument_matches,
+                        tree,
+                        schema,
+                        rule,
+                        &node_spec,
+                        &node,
+                        sink,
+                    );
 
                     let slot_range = if let Some(parent) = frame.arena_base {
                         arena[parent.0].get().child_block
