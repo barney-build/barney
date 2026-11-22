@@ -3,27 +3,28 @@
 
 //! Schema validated document view
 
+mod errors;
+pub use errors::ValidationError;
 mod node;
+pub use node::ValidatedNode;
 
 use std::collections::VecDeque;
 
 use crate::argument::ArgumentKind;
 use crate::diagnostics::{SchemaDiagnostic, reporting};
-use crate::validated::node::{ValidatedNode, ValidationResult};
+use crate::validated::node::ValidationResult;
 use crate::{ArgumentSpec, AsBnyValueType, AsOptionalBnyValueType};
 use crate::{
     BnySchema, BnyValueType, PropertySpec, SchemaIndex, SchemaKey,
     compiled::{BindingReference, BnyRuleRef},
     registry::LinkedSchemaRegistry,
     spec::RuleSpec,
-    value::{self},
 };
 use bny_diag::DiagnosticSink;
 use bny_slots::{Block, LinkedSlotStorage, SlotStorage};
 use bny_syntax::{BnyArgumentRef, BnyInterner, BnyNodeRef, BnyPropertyRef, BnyTree};
 use indextree::{Arena, NodeId};
 use itertools::{Either, Itertools};
-use thiserror::Error;
 
 /// Every node is paired to a contextual set of rules
 /// If they're not explicitly provided then the rules
@@ -600,40 +601,4 @@ impl<'a> ValidatedDocument<'a> {
         let value = property.map(|p| p.value(self.tree));
         Ok(K::from_processed_value(value)?)
     }
-}
-
-#[derive(Debug, Error)]
-pub enum ValidationError {
-    #[error("cannot find key {key} in the active schema")]
-    InvalidBinding { key: String },
-
-    #[error("using key {key} in the wrong context ")]
-    InvalidContext { key: String },
-
-    #[error("symbolic {key} does not point to a node rule")]
-    ExpectedNodeSymbolic { key: String },
-
-    #[error("symbolic {key} does not point to a property rule")]
-    ExpectedPropertySymbolic { key: String },
-
-    #[error("symbolic {key} does not point to an argument rule")]
-    ExpectedArgumentSymbolic { key: String },
-
-    #[error(transparent)]
-    ValueError(#[from] value::ValueError),
-
-    #[error("wrong return type, schema expects {schema_type}, not {found_type}")]
-    WrongReturnType {
-        schema_type: BnyValueType,
-        found_type: BnyValueType,
-    },
-
-    #[error("wrong cardinality applied")]
-    WrongCardinality,
-
-    #[error("properties not supported for this node")]
-    NoProperties,
-
-    #[error("arguments not supported for this node")]
-    NoArguments,
 }
