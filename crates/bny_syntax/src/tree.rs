@@ -95,6 +95,10 @@ impl BnyPropertyRef {
 }
 
 impl BnyArgumentRef {
+    pub fn span(&self, tree: &BnyTree) -> SourceSpan {
+        tree.args[self.id].get().span()
+    }
+
     pub fn value<'a>(&'a self, tree: &'a BnyTree) -> &'a ProcessedValue {
         tree.args[self.id].get().value()
     }
