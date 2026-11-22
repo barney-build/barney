@@ -7,8 +7,6 @@ use thiserror::Error;
 
 pub(crate) mod reporting {
     pub const FIRST_SEEN: &str = "First seen here";
-    pub const ALSO_SEEN: &str = "and also here";
-
     pub const PROPERTY: &str = "For this property";
     pub const ARGUMENT: &str = "For this argument";
 }
