@@ -6,7 +6,7 @@
 use bny_slots::Block;
 use bny_syntax::StringId;
 
-use crate::{BnyValueType, Occurrence, registry::SchemaIndex};
+use crate::{BnyValueType, Occurrence, argument::ArgumentKind, registry::SchemaIndex};
 
 /// Type-erasure contract for NodeDef
 #[derive(Debug, Clone, Copy)]
@@ -22,6 +22,9 @@ pub struct NodeSpec {
 
     /// Storage address of property rules
     pub(crate) properties: Option<Block>,
+
+    /// Storage address of argument rules
+    pub(crate) arguments: Option<Block>,
 
     /// Permitted occurrence rules
     pub(crate) occurrence: Occurrence,
@@ -47,6 +50,23 @@ pub struct PropertySpec {
 
     /// Required property?
     pub(crate) required: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct ArgumentSpec {
+    /// Symbolic match value
+    pub(crate) symbolic: u8,
+
+    /// Index within parent context (Node)
+    pub(crate) local_index: usize,
+
+    /// Accepted value type
+    pub(crate) kind: BnyValueType,
+
+    /// Required property?
+    pub(crate) required: bool,
+
+    pub(crate) arg_kind: ArgumentKind,
 }
 
 /// Encapsulates node rules into singular rule

@@ -9,7 +9,7 @@
 use bny_slots::Block;
 use bny_syntax::BnyInterner;
 
-use crate::{NodeSpec, Occurrence, PropertyDef, Rule, SchemaKey, SchemaName};
+use crate::{ArgumentDef, NodeSpec, Occurrence, PropertyDef, Rule, SchemaKey, SchemaName};
 
 /// Node schema
 #[derive(Debug)]
@@ -17,6 +17,7 @@ pub struct NodeDef<'a, T: SchemaKey<'a>> {
     identity: T,
     children: Option<Rule<'a, T>>,
     properties: Option<&'a [PropertyDef<'a, T>]>,
+    arguments: Option<&'a [ArgumentDef<'a, T>]>,
     occurrence: Occurrence,
 }
 
@@ -28,6 +29,7 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
             children: None,
             properties: None,
             occurrence: Occurrence::unbounded(),
+            arguments: None,
         }
     }
 
@@ -37,6 +39,7 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
         intern: &mut BnyInterner,
         index: usize,
         properties: Option<Block>,
+        arguments: Option<Block>,
     ) -> NodeSpec {
         NodeSpec {
             id: match self.identity().name() {
@@ -46,6 +49,7 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
             symbolic: self.identity().symbolic_id(),
             local_index: index,
             properties,
+            arguments,
             global_index: None,
             occurrence: self.occurrence,
         }
@@ -80,5 +84,15 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
     pub const fn occurrence(mut self, occurrence: Occurrence) -> Self {
         self.occurrence = occurrence;
         self
+    }
+
+    pub const fn arguments(mut self, arguments: &'a [ArgumentDef<'a, T>]) -> Self {
+        self.arguments = Some(arguments);
+        self
+    }
+
+    /// Return the argument rules
+    pub(crate) fn args(&'a self) -> Option<&'a &'a [ArgumentDef<'a, T>]> {
+        self.arguments.as_ref()
     }
 }
