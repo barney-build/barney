@@ -3,13 +3,16 @@
 
 //! Schema validated document view
 
+mod node;
+
 use std::collections::VecDeque;
 
 use crate::argument::ArgumentKind;
 use crate::diagnostics::{SchemaDiagnostic, reporting};
+use crate::validated::node::{ValidatedNode, ValidationResult};
 use crate::{ArgumentSpec, AsBnyValueType, AsOptionalBnyValueType};
 use crate::{
-    BnySchema, BnyValueType, NodeSpec, PropertySpec, SchemaIndex, SchemaKey,
+    BnySchema, BnyValueType, PropertySpec, SchemaIndex, SchemaKey,
     compiled::{BindingReference, BnyRuleRef},
     registry::LinkedSchemaRegistry,
     spec::RuleSpec,
@@ -633,67 +636,4 @@ pub enum ValidationError {
 
     #[error("arguments not supported for this node")]
     NoArguments,
-}
-
-/// Encapsulates matching
-#[derive(Debug)]
-pub struct ValidatedNode<'a> {
-    matched: MatchId,
-    doc: &'a ValidatedDocument<'a>,
-    schema: SchemaIndex,
-}
-
-impl<'a> ValidatedNode<'a> {
-    // Child level schema nodes
-    pub fn nodes<T: SchemaKey<'a>>(
-        &self,
-        key: T,
-    ) -> Result<impl Iterator<Item = ValidatedNode<'a>>, ValidationError> {
-        self.doc
-            .get_nodes_for_parent(Some(self.matched), key, self.schema)
-    }
-
-    // Grab the name
-    pub fn name(&self) -> &'a str {
-        let m = self.doc.arena[self.matched.0].get();
-        self.doc.intern.resolve(m.node.name(self.doc.tree))
-    }
-
-    pub fn property<T: AsOptionalBnyValueType<'a>>(
-        &self,
-        identity: impl SchemaKey<'a>,
-    ) -> Result<T, ValidationError> {
-        self.doc.get_property(self.matched, self.schema, identity)
-    }
-
-    /// Return the value for a single argument
-    pub fn argument<T: AsBnyValueType<'a>>(
-        &self,
-        identity: impl SchemaKey<'a>,
-    ) -> Result<T, ValidationError> {
-        self.doc.get_argument(self.matched, self.schema, identity)
-    }
-
-    /// Return a list of values for a variadic argument range
-    pub fn arguments<T: AsBnyValueType<'a>>(
-        &self,
-        identity: impl SchemaKey<'a>,
-    ) -> Result<impl Iterator<Item = T>, ValidationError> {
-        self.doc
-            .get_arguments(self.matched, self.schema, identity, true)
-    }
-}
-
-enum ValidationResult {
-    // matched a rule
-    Matched {
-        rule: BnyRuleRef,
-        index: usize,
-        node_spec: NodeSpec,
-        node: BnyNodeRef,
-    },
-    // unmatched, try someone else
-    Unmatched,
-    // change schema validation context
-    ChangeContext(SchemaIndex),
 }
