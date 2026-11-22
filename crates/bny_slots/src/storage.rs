@@ -88,6 +88,16 @@ where
     pub fn iter<'a>(&'a self) -> Iter<'a, T> {
         self.data.iter()
     }
+
+    /// Return storage allocation length
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns true if storage is empty
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }
 
 #[cfg(test)]

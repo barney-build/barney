@@ -84,7 +84,11 @@ where
 
     /// iterate all the chains
     pub fn iter(&self, head_block: Block, index: usize) -> impl Iterator<Item = &T> {
-        let item = Some(head_block.0.start + index);
+        let item = if head_block.0.start + index < self.store.len() {
+            Some(head_block.0.start + index)
+        } else {
+            None
+        };
         iter::successors(item, |e| self.store.get(*e).next)
             .flat_map(|i| self.store.get(i).datum.as_ref())
     }
