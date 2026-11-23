@@ -119,7 +119,7 @@ mod tests {
         let bny_file = r#"
             recipe bob {
                 version "ya"
-                release bob
+                release 1
 
                 summary "Some kinda summary"
                 description Some kinda description
@@ -149,7 +149,7 @@ mod tests {
             eprintln!(
                 "report = {:?}",
                 miette::Report::new(blah.as_miette(&sink))
-                    .with_source_code(NamedSource::new("recipe.bny", bny_file))
+                    .with_source_code(NamedSource::new("recipe.bny", bny_file).with_language("C"))
             );
         }
         assert_eq!(sink.errors(), false, "Should not have any errors");

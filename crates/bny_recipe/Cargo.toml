@@ -7,4 +7,4 @@ edition = "2024"
 bny_diag = { path = "../bny_diag" }
 bny_schema = { path = "../bny_schema" }
 bny_syntax = { path = "../bny_syntax" }
-miette = { workspace = true, features = ["fancy"]}
+miette = { workspace = true, features = ["fancy", "syntect-highlighter"]}
