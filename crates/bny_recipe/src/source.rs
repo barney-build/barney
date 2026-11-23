@@ -152,6 +152,7 @@ mod tests {
                     .with_source_code(NamedSource::new("recipe.bny", bny_file))
             );
         }
+        assert_eq!(sink.errors(), false, "Should not have any errors");
 
         let recipe = validated
             .nodes(SourceKeys::Root)

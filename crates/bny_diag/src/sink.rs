@@ -119,6 +119,16 @@ impl DiagnosticSink {
                 })),
             })
     }
+
+    /// Returns true if any diagnostic has an error in it
+    pub fn errors(&self) -> bool {
+        for item in self.diagnostics.iter() {
+            if item.severity == Severity::Error {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 impl Default for DiagnosticSink {
