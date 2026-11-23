@@ -50,7 +50,6 @@ impl<'a, T: SchemaKey<'a>> NodeDef<'a, T> {
             local_index: index,
             properties,
             arguments,
-            global_index: None,
             occurrence: self.occurrence,
         }
     }

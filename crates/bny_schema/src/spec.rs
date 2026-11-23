@@ -28,9 +28,6 @@ pub struct NodeSpec {
 
     /// Permitted occurrence rules
     pub(crate) occurrence: Occurrence,
-
-    /// Empty / useless until hitting linked registry
-    pub(crate) global_index: Option<usize>,
 }
 
 /// Type-erasure contract for PropertyDef

@@ -207,9 +207,6 @@ impl<'a> ValidatedDocument<'a> {
         let mut property_matches = SlotStorage::new();
         let mut argument_matches = LinkedSlotStorage::new();
 
-        let mut rule_tracking = LinkedSlotStorage::new();
-        let rule_block = rule_tracking.allocate(registry.global_nodes());
-
         while let Some(frame) = work_queue.pop_front() {
             let schema = &registry.schemas[frame.schema_id.0];
             let result = if let Some(rule_base) = &frame.rule_base {
@@ -275,11 +272,6 @@ impl<'a> ValidatedDocument<'a> {
                     };
 
                     let child_block = slots.allocate(our_child_count);
-
-                    // Rule tracking pairs the parent-context slot storage with the rule ids for nodespecs
-                    if let Some(guid) = node_spec.global_index.as_ref() {
-                        rule_tracking.push(rule_block, *guid, Some(slot_range));
-                    }
 
                     let matched_node = Match {
                         child_block,
