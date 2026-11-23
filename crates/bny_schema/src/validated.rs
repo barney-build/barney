@@ -317,6 +317,101 @@ impl<'a> ValidatedDocument<'a> {
             }
         }
 
+        let mut frames: VecDeque<(BnyRuleRef, SchemaIndex, Block, Option<MatchId>)> =
+            VecDeque::new();
+        frames.extend(
+            registry
+                .entry()
+                .rules()
+                .map(|r| (r, registry.entry, root_slots, None)),
+        );
+
+        while let Some((rule, index, block, parent_match)) = frames.pop_front() {
+            let schema = &registry.schemas[index.0];
+            if let RuleSpec::MatchNode(node_spec) = rule.rule(schema) {
+                let occurs = slots.iter(block, node_spec.local_index).count() as u8;
+                if let Err(e) = node_spec.occurrence.validate(occurs) {
+                    let id = node_spec.id.map(|s| intern.resolve(s)).unwrap_or_default();
+
+                    match occurs {
+                        0 => {
+                            let id = sink.insert_error(
+                                e,
+                                Some(&format!("Cannot find required node `{id}`!")),
+                            );
+                            if let Some(parent) = parent_match {
+                                let node = arena[parent.0].get();
+                                sink.push_span(id, node.node.span(tree), reporting::FIRST_SEEN);
+                            }
+                        }
+                        _ => {
+                            let root =
+                                sink.insert_error(e, Some("Violated occurrence constraints"));
+                            for item in slots.iter(block, node_spec.local_index) {
+                                let node = arena[item.0].get();
+                                sink.push_span(root, node.node.span(tree), reporting::FIRST_SEEN);
+                            }
+                        }
+                    }
+                }
+
+                // For all of the children we'll now walk all of the rules :3
+                for child in slots.iter(block, node_spec.local_index) {
+                    let node = arena[child.0].get();
+                    for arg in rule.arguments(schema, node_spec) {
+                        if !arg.required {
+                            continue;
+                        }
+                        let mapped = argument_matches.iter(node.args, arg.local_index).count();
+                        if mapped < 1 {
+                            let id = sink.insert(
+                                miette::Severity::Error,
+                                &format!("Missing argument {}", arg.local_index),
+                                Some(&format!(
+                                    "Provide argument `{}` on the `{}` node",
+                                    arg.local_index,
+                                    intern.resolve(node.node.name(tree))
+                                )),
+                            );
+                            sink.push_span(id, node.node.span(tree), reporting::FIRST_SEEN);
+                        }
+                    }
+                    for prop in rule.properties(schema, node_spec) {
+                        if !prop.required {
+                            continue;
+                        }
+                        let mapped = property_matches.get(node.props.0.start + prop.local_index);
+                        if mapped.is_none() {
+                            let id = node_spec.id.map(|s| intern.resolve(s)).unwrap_or_default();
+                            let prop_id = prop.id.map(|p| intern.resolve(p)).unwrap_or_default();
+                            let id = sink.insert(
+                                miette::Severity::Error,
+                                &format!("Missing required property {prop_id} on {id}"),
+                                None,
+                            );
+                            sink.push_span(id, node.node.span(tree), reporting::PROPERTY);
+                        }
+                    }
+
+                    for rule in rule.children(schema) {
+                        match rule.rule(schema) {
+                            RuleSpec::ExternalSchemaIndexed(schema_index) => {
+                                let fog = &registry.schemas[schema_index.0];
+                                frames.extend(
+                                    fog.rules().map(|r| {
+                                        (r, *schema_index, node.child_block, Some(*child))
+                                    }),
+                                );
+                            }
+                            _ => {
+                                frames.push_back((rule, index, node.child_block, Some(*child)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         ValidatedDocument {
             registry,
             tree,
