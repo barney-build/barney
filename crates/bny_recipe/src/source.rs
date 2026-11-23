@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn load_single_bny() {
         let bny_file = r#"
-            recipe {
+            recipe bob {
                 version "ya"
                 release bob
 
