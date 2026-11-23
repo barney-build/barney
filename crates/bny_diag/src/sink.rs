@@ -127,7 +127,7 @@ impl DiagnosticSink {
                 return true;
             }
         }
-        return false;
+        false
     }
 }
 
