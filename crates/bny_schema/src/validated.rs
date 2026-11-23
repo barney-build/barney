@@ -322,9 +322,14 @@ impl<'a> ValidatedDocument<'a> {
                         SchemaDiagnostic::IllegalNode {
                             id: intern.resolve(frame.node.name(tree)).to_string(),
                         },
-                        None,
+                        Some("The symbol you provided isn't a valid identifier in this particular node."),
                     );
-                    sink.push_span(id, frame.node.span(tree), reporting::FIRST_SEEN);
+                    // Ensure we have the whole node in view
+                    if let Some(parent) = frame.arena_base {
+                        let parent_node = arena[parent.0].get();
+                        sink.push_span(id, parent_node.node.span(tree), reporting::IN_HERE);
+                    }
+                    sink.push_span(id, frame.node.span(tree), reporting::ILLEGAL_NAME);
                 }
             }
         }

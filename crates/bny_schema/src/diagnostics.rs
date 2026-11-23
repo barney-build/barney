@@ -9,6 +9,8 @@ pub(crate) mod reporting {
     pub const FIRST_SEEN: &str = "First seen here";
     pub const PROPERTY: &str = "For this property";
     pub const ARGUMENT: &str = "For this argument";
+    pub const IN_HERE: &str = "In this node";
+    pub const ILLEGAL_NAME: &str = "This symbol is not recognised in this context";
 }
 
 #[derive(Debug, Error)]
