@@ -28,7 +28,6 @@ use bny_diag::DiagnosticSink;
 use bny_slots::{Block, LinkedSlotStorage, SlotStorage};
 use bny_syntax::{BnyArgumentRef, BnyInterner, BnyNodeRef, BnyPropertyRef, BnyTree};
 use indextree::{Arena, NodeId};
-use itertools::{Either, Itertools};
 
 /// Every node is paired to a contextual set of rules
 /// If they're not explicitly provided then the rules
@@ -110,25 +109,15 @@ impl<'a> ValidatedDocument<'a> {
     }
 
     fn process_rules(
-        rules: impl Iterator<Item = BnyRuleRef>,
+        explicit_rules: impl Iterator<Item = BnyRuleRef>,
+        wildcard_rules: impl Iterator<Item = BnyRuleRef>,
         schema: &BnySchema,
         tree: &BnyTree<'a>,
         frame: ValidationFrame,
     ) -> ValidationResult {
-        let (normal, wildcard): (Vec<_>, Vec<_>) =
-            rules.into_iter().partition_map(|p| match p.rule(schema) {
-                RuleSpec::MatchNode(node_spec) => {
-                    if node_spec.id.is_some() {
-                        Either::Left(p)
-                    } else {
-                        Either::Right(p)
-                    }
-                }
-                _ => Either::Left(p),
-            });
-        match Self::process_rules_internal(normal.into_iter(), schema, tree, frame) {
+        match Self::process_rules_internal(explicit_rules, schema, tree, frame) {
             ValidationResult::Unmatched => {
-                Self::process_rules_internal(wildcard.into_iter(), schema, tree, frame)
+                Self::process_rules_internal(wildcard_rules, schema, tree, frame)
             }
             res => res,
         }
@@ -173,6 +162,25 @@ impl<'a> ValidatedDocument<'a> {
         (schema_id, count)
     }
 
+    // Split rules by consuming an iterator and returning wildcard_only or
+    // everything else instead
+    // This ensures any wildcard rules are last
+    fn split_rules(
+        schema: &BnySchema,
+        rules: impl Iterator<Item = BnyRuleRef>,
+        wildcard_only: bool,
+    ) -> impl Iterator<Item = BnyRuleRef> {
+        rules.into_iter().filter(move |r| {
+            if let RuleSpec::MatchNode(n) = r.rule(schema)
+                && n.id.is_none()
+            {
+                wildcard_only
+            } else {
+                !wildcard_only
+            }
+        })
+    }
+
     /// Return a document view with all validation performed
     pub(super) fn new(
         registry: &'a LinkedSchemaRegistry,
@@ -205,9 +213,21 @@ impl<'a> ValidatedDocument<'a> {
         while let Some(frame) = work_queue.pop_front() {
             let schema = &registry.schemas[frame.schema_id.0];
             let result = if let Some(rule_base) = &frame.rule_base {
-                Self::process_rules(rule_base.children(schema), schema, tree, frame)
+                Self::process_rules(
+                    Self::split_rules(schema, rule_base.children(schema), false),
+                    Self::split_rules(schema, rule_base.children(schema), true),
+                    schema,
+                    tree,
+                    frame,
+                )
             } else {
-                Self::process_rules(schema.rules(), schema, tree, frame)
+                Self::process_rules(
+                    Self::split_rules(schema, schema.rules(), false),
+                    Self::split_rules(schema, schema.rules(), true),
+                    schema,
+                    tree,
+                    frame,
+                )
             };
 
             match result {
