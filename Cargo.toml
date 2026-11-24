@@ -2,6 +2,7 @@
 resolver = "3"
 
 members = [
+    "barney",
     "cli",
     "crates/bny_diag",
     "crates/bny_recipe",

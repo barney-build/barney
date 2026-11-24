@@ -116,6 +116,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "barney"
+version = "0.1.0"
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -257,6 +261,7 @@ checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
 name = "cli"
 version = "0.1.0"
 dependencies = [
+ "barney",
  "clap",
  "indicatif",
  "miette",
