@@ -3,8 +3,8 @@
 
 use std::{path::PathBuf, process};
 
-use barney::build;
 use clap::{Parser, Subcommand};
+use cli::build;
 use tokio::runtime;
 
 #[derive(Parser)]
@@ -48,6 +48,6 @@ async fn priv_async_main() {
     // TODO: capture intended failure code from decorated error
     if let Err(e) = result {
         eprintln!("{e:?}");
-        process::exit(barney::ExitCode::Abnormal.into())
+        process::exit(cli::ExitCode::Abnormal.into())
     }
 }
