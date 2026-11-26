@@ -10,8 +10,12 @@ path = "src/main.rs"
 [dependencies]
 barney = { path = "../barney" }
 
-clap = { version = "4.6.6", features = ["derive"] }
-miette = { workspace = true, features = ["fancy"]}
 tracing.workspace = true
-tokio = { workspace = true, features = ["full"]}
-indicatif = { workspace = true, features = ["tokio"] }
+
+# CLI explicit dependencies
+clap = { version = "4.6.6", features = ["derive"] }
+indicatif = { version = "0.18.6", features = ["tokio"] }
+tokio = { version = "1.53.1", features = ["full"] }
+
+# Soon to be CLI explicit
+miette = { workspace = true, features = ["fancy"]}
